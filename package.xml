@@ -1,0 +1,17 @@
+<package>
+  <name>mts_galil_controller</name>
+  <version>2.0.0</version>
+  <description>
+  sawForceDimensionSDK
+  </description>
+  <maintainer email="dlezcan1@jhu.edu">Dimitri Lezcano</maintainer>
+  <license>cisst</license>
+
+  <build_depend>cisst</build_depend>
+  <run_depend>cisst</run_depend>
+
+  <export>
+    <build_type>catkin</build_type>
+  </export>
+
+</package>
