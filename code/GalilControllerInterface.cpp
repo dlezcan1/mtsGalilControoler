@@ -17,7 +17,7 @@
 //7: Messages during normal operations
 //8: Very verbose, i.e. log all connections to the Galil controller.
 
-std::map<std::string, GalilControllerInterface*> GalilControllerInterfaceFactory::s_instances = {};
+std::unordered_map<std::string, GalilControllerInterface*> GalilControllerInterfaceFactory::s_instances = {};
 
 CMN_IMPLEMENT_SERVICES(GalilControllerInterface);
 

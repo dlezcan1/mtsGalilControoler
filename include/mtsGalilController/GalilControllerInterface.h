@@ -16,7 +16,7 @@
 #include <sstream>
 #include <iostream>
 #include <stdexcept>
-#include <map>
+#include <unordered_map>
 #include <memory>
 
 
@@ -305,7 +305,7 @@ protected:
     friend class GalilControllerInterface;
     friend class DemoGalilControllerInterface;
     
-    static std::map<std::string, GalilControllerInterface*> s_instances;
+    static std::unordered_map<std::string, GalilControllerInterface*> s_instances;
 
 }; // class: GalilControllerInterfaceFactory
 

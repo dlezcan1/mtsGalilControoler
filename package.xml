@@ -2,7 +2,7 @@
   <name>mts_galil_controller</name>
   <version>2.0.0</version>
   <description>
-  sawForceDimensionSDK
+  mtsGalilController
   </description>
   <maintainer email="dlezcan1@jhu.edu">Dimitri Lezcano</maintainer>
   <license>cisst</license>

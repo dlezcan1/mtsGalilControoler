@@ -86,6 +86,8 @@ void mtsGalilController::SetupInterfaces()
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::WaitMotion,   this, "WaitMotion");
 
     MTS_ADD_COMMAND_READ_CHECK(intfProvided, &GalilControllerInterface::GetAnalogInputs, m_galilController, "GetAnalogInputs");
+
+    delete intfProvided;
 }
 
 

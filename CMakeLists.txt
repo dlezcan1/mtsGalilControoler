@@ -12,6 +12,8 @@
 cmake_minimum_required (VERSION 3.10)
 project (mtsGalilController VERSION 0.0.0)
 
+include_directories (include)
+
 # create a list of required cisst libraries
 set (REQUIRED_CISST_LIBRARIES 
     cisstCommon
@@ -34,7 +36,6 @@ if (cisst_FOUND_AS_REQUIRED)
 
     # catkin/ROS paths
     cisst_set_output_path ()
-    include_directories (include)
 
     # add all config files for this component
     cisst_add_config_files (mtsGalilController)

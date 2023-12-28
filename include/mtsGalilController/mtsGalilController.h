@@ -4,6 +4,7 @@
 #include <memory>
 
 #include <cisstCommon/cmnUnits.h>
+#include <cisstParameterTypes/prmActuatorState.h>
 #include <cisstMultiTask.h>
 
 #include "mtsGalilController/GalilControllerInterface.h"
