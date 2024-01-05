@@ -640,13 +640,13 @@ void GalilControllerInterface::SetVelocityMove(const prmMaskedDoubleVec &goalVel
 
 //Note : while the robot is moving we can not change the acceleration or decelaration.
 //this sets the velocity rather then position       
-void GalilControllerInterface::SetVelocity( const prmMaskedDoubleVec &velocity) throw(ExcpSystemError, RobotException){
-    CMN_LOG_CLASS_RUN_VERBOSE << "Setting velocity \"" << velocity <<"\"" << std::endl;
+void GalilControllerInterface::SetSpeed( const prmMaskedDoubleVec &speed) throw(ExcpSystemError, RobotException){
+    CMN_LOG_CLASS_RUN_VERBOSE << "Setting velocity \"" << speed <<"\"" << std::endl;
     char buffer[G_SMALL_BUFFER];
     //correct for TM2500
-    mtsDoubleVec v(velocity.Data());
+    mtsDoubleVec v(speed.Data());
 
-    CreateCommand(buffer,"SP",velocity.Mask(),v);
+    CreateCommand(buffer,"SP",speed.Mask(),v);
     SendCommand(buffer);
 }
 void GalilControllerInterface::SetAcceleration( const prmMaskedDoubleVec &acceleration) throw(ExcpSystemError, RobotException){

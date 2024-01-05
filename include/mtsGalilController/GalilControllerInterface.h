@@ -145,9 +145,9 @@ public:
     
     //Set the parameters used in motion commands.
     //The velocity is used in position moves  
-    void SetVelocity( const prmMaskedDoubleVec &velocity) throw( ExcpSystemError, RobotException);
     
     //both of the following are used in position and move requests.
+    void SetSpeed( const prmMaskedDoubleVec &speed) throw( ExcpSystemError, RobotException);
     void SetAcceleration( const  prmMaskedDoubleVec &acceleration) throw( ExcpSystemError, RobotException);
     void SetDeceleration( const prmMaskedDoubleVec &deceleration) throw( ExcpSystemError, RobotException);
     

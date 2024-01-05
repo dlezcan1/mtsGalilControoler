@@ -68,11 +68,12 @@ void mtsGalilController::SetupInterfaces()
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::Home,          m_galilController, "Home");
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::UnHome,        m_galilController, "UnHome");
 
-    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::SetAbsolutePosition, m_galilController, "SetAbsolutePosition");
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::SetAcceleration,     m_galilController, "SetAccleration");
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::SetDeceleration,     m_galilController, "SetDecleration");
+    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::SetSpeed,            m_galilController, "SetSpeed");
+    
+    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::SetAbsolutePosition, m_galilController, "SetAbsolutePosition");
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::SetPositionMove,     m_galilController, "SetPositionMove");
-    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::SetVelocity,         m_galilController, "SetVelocity");
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::SetVelocityMove,     m_galilController, "SetVelocityMove");
     
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::EnableMotorPower,     m_galilController, "EnableMotorPower");
