@@ -107,11 +107,16 @@ GCStringOut GalilControllerInterface::BufferToGCStringOut(char* buffer, unsigned
     
 }
 
-void GalilControllerInterface::Abort() {
+void GalilControllerInterface::AbortProgram() {
     this->SendCommand("AB");
     
 }
 
+void GalilControllerInterface::AbortMotion()
+{
+    this->SendCommand("AB 1");
+
+}
 
 void GalilControllerInterface::Close() {
 

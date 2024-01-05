@@ -62,10 +62,11 @@ void mtsGalilController::SetupInterfaces()
     }
 
     // Galil commands
-    MTS_ADD_COMMAND_VOID_CHECK(intfProvided,  &GalilControllerInterface::Abort,  m_galilController, "Abort");
-    MTS_ADD_COMMAND_VOID_CHECK(intfProvided,  &GalilControllerInterface::Reset,  m_galilController, "Reset");
-    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::Home,   m_galilController, "Home");
-    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::UnHome, m_galilController, "UnHome");
+    MTS_ADD_COMMAND_VOID_CHECK(intfProvided,  &GalilControllerInterface::AbortProgram,  m_galilController, "AbortProgram");
+    MTS_ADD_COMMAND_VOID_CHECK(intfProvided,  &GalilControllerInterface::AbortMotion,   m_galilController, "AbortMotion");
+    MTS_ADD_COMMAND_VOID_CHECK(intfProvided,  &GalilControllerInterface::Reset,         m_galilController, "Reset");
+    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::Home,          m_galilController, "Home");
+    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::UnHome,        m_galilController, "UnHome");
 
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::SetAbsolutePosition, m_galilController, "SetAbsolutePosition");
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::SetAcceleration,     m_galilController, "SetAccleration");

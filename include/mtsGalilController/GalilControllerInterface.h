@@ -116,7 +116,8 @@ public:
     void UnHome( const mtsBoolVec &mask ) CISST_THROW( ExcpSystemError );
 
     // Abort robot command
-    void Abort();
+    void AbortProgram();
+    void AbortMotion();
 
     // Reset robot, don't use this too often
     void Reset(); 
