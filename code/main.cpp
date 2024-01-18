@@ -28,7 +28,6 @@ int main(int argc, char* argv[])
     componentManager->CreateAll();
     componentManager->WaitForStateAll(mtsComponentState::READY, 2.0 * cmn_s);
 
-
     // Start componenets
     componentManager->StartAll();
     componentManager->WaitForStateAll(mtsComponentState::ACTIVE, 2.0 * cmn_s);

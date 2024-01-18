@@ -94,7 +94,7 @@ public:
     // Initialize (e.g., establish communications with the controller)
     // and configure the robot.  Note that a configuration file name could
     // be added as a parameter.
-    bool Init(const std::string & deviceName);
+    virtual bool Init(const std::string & deviceName);
     virtual void Close() CISST_THROW( ExcpSystemError );
     // Enable/disable motor power for all axes
     void EnableAllMotorPower() throw( ExcpPowerOff, ExcpSystemError );
@@ -271,7 +271,7 @@ public:
     DemoGalilControllerInterface( const GalilControllerInterface& controller ) : GalilControllerInterface(controller) {}
     ~DemoGalilControllerInterface() {}
 
-    bool Init( const std::string& deviceName );
+    bool Init( const std::string& deviceName ) override;
     void Close() override;
 
     std::string SendCommand( const std::string& command) override;
@@ -286,19 +286,20 @@ CMN_DECLARE_SERVICES_INSTANTIATION(DemoGalilControllerInterface);
 class GalilControllerInterfaceFactory {
 public:
 
-    template <
-        class T, 
-        std::enable_if_t<std::is_base_of<GalilControllerInterface, T>::value, bool> = true
-    >
-    static T* GetControllerInterface(const std::string& deviceName)
+    static std::shared_ptr<GalilControllerInterface> GetControllerInterface(const std::string& deviceName)
     {
         if (s_instances.count(deviceName) > 0)
-            return (T*) s_instances[deviceName];
+            return s_instances[deviceName];
 
-        T* gc = new T();
+        std::shared_ptr<GalilControllerInterface> gc;
+        if (deviceName.compare("demo"))
+            gc = std::make_shared<DemoGalilControllerInterface>();
+        else
+            gc = std::make_shared<DemoGalilControllerInterface>();
+
         gc->Init(deviceName);
 
-        return (T*) gc;
+        return gc;
     }
 
 
@@ -306,7 +307,7 @@ protected:
     friend class GalilControllerInterface;
     friend class DemoGalilControllerInterface;
     
-    static std::unordered_map<std::string, GalilControllerInterface*> s_instances;
+    static std::unordered_map<std::string, std::shared_ptr<GalilControllerInterface>> s_instances;
 
 }; // class: GalilControllerInterfaceFactory
 

@@ -10,7 +10,7 @@
 # --- end cisst license ---
 
 cmake_minimum_required (VERSION 3.10)
-project (mtsGalilController VERSION 0.0.0)
+project (mts_galil_controller VERSION 0.0.0)
 
 include_directories (include)
 
@@ -25,6 +25,34 @@ set (REQUIRED_CISST_LIBRARIES
 
 find_package (cisst 1.2.0 REQUIRED ${REQUIRED_CISST_LIBRARIES})
 
+set( catkin_REQUIRED_COMPONENTS 
+    roscpp
+    rospy
+    std_msgs
+    geometry_msgs
+    cisst_msgs
+    cisst_ros_bridge
+)
+
+find_package(catkin REQUIRED COMPONENTS
+    ${catkin_REQUIRED_COMPONENTS}
+)
+include_directories(${catkin_INCLUDE_DIRS})
+catkin_package(
+    INCLUDE_DIRS include
+    LIBRARIES mtsGalilController
+    CATKIN_DEPENDS ${catkin_REQUIRED_COMPONENTS}
+)
+
+set ( mtsGalilController_HEADER_FILES
+    include/mtsGalilController/GalilControllerInterface.h
+    include/mtsGalilController/mtsGalilController.h
+)
+set ( mtsGalilController_SOURCE_FILES
+    code/GalilControllerInterface.cpp
+    code/mtsGalilController.cpp
+)
+
 if (cisst_FOUND_AS_REQUIRED)
 
     # load cisst configuration
@@ -36,37 +64,44 @@ if (cisst_FOUND_AS_REQUIRED)
 
     # catkin/ROS paths
     cisst_set_output_path ()
+    catkin_package(
+        LIBRARIES mtsGalilController
+        INCLUDE_DIRS include
+        CATKIN_DEPENDS ${catkin_REQUIRED_COMPONENTS}
+    )
 
     # add all config files for this component
     cisst_add_config_files (mtsGalilController)
     
     add_library (mtsGalilController 
-        include/mtsGalilController/GalilControllerInterface.h
-        code/GalilControllerInterface.cpp
-        include/mtsGalilController/mtsGalilController.h
-        code/mtsGalilController.cpp
+        ${mtsGalilController_SOURCE_FILES}
     )
-    add_executable(mtsGalilController_Test 
-        code/main.cpp
-    )
-    target_link_libraries(mtsGalilController_Test mtsGalilController)
     
-    cisst_target_link_libraries(mtsGalilController_Test ${REQUIRED_CISST_LIBRARIES})
-
+    cisst_target_link_libraries (mtsGalilController ${REQUIRED_CISST_LIBRARIES})
+    
     set_target_properties (mtsGalilController PROPERTIES
-                            VERSION ${mtsGalilController_VERSION}
-                            FOLDER "mtsGalilController"
+        VERSION ${mts_galil_controller_VERSION}
+        FOLDER "mtsGalilController"
+        PUBLIC_HEADER "${mtsGalilController_HEADER_FILES}"
+    )
+    target_include_directories(mtsGalilController PUBLIC 
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
     )
     target_link_libraries (mtsGalilController
-        ${mtsGalilController_INCLUDE_DIR}
+        ${catkin_LIBRARIES}
         -lgclib
         -lgclibo                  
     )
-    cisst_target_link_libraries (mtsGalilController ${REQUIRED_CISST_LIBRARIES})
+
+    add_executable(mtsGalilController_Test 
+        code/main.cpp
+    )
+    target_link_libraries(mtsGalilController_Test mtsGalilController ${catkin_LIBRARIES})
+    cisst_target_link_libraries(mtsGalilController_Test ${REQUIRED_CISST_LIBRARIES})
 
     # Install target for headers and library
     install (
-        DIRECTORY "${mtsGalilController_SOURCE_DIR}/include/mtsGalilController"
+        DIRECTORY "${mts_galil_controller_SOURCE_DIR}/include/mtsGalilController"
         DESTINATION include
         COMPONENT mtsGalilController-dev
         PATTERN .svn EXCLUDE
@@ -78,6 +113,16 @@ if (cisst_FOUND_AS_REQUIRED)
             RUNTIME DESTINATION bin
             LIBRARY DESTINATION lib
             ARCHIVE DESTINATION lib
+    )
+
+    install(TARGETS mtsGalilController
+        ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+        LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+        RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+    )
+
+    install(DIRECTORY include/mtsGalilController/
+        DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
     )
 
 else (cisst_FOUND_AS_REQUIRED)

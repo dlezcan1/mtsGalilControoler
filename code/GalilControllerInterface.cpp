@@ -17,7 +17,7 @@
 //7: Messages during normal operations
 //8: Very verbose, i.e. log all connections to the Galil controller.
 
-std::unordered_map<std::string, GalilControllerInterface*> GalilControllerInterfaceFactory::s_instances = {};
+std::unordered_map<std::string, std::shared_ptr<GalilControllerInterface>> GalilControllerInterfaceFactory::s_instances = {};
 
 CMN_IMPLEMENT_SERVICES(GalilControllerInterface);
 
@@ -44,7 +44,7 @@ GalilControllerInterface::GalilControllerInterface()
     m_DigitalInput.SetSize(m_NumberEncoderPins);
     m_DigitalInput.Zeros();
 
-    m_galil = NULL;
+    m_galil = nullptr;
     //max number of actuator is 8 here
     //so 
     char analogStr[7];
@@ -121,13 +121,11 @@ void GalilControllerInterface::AbortMotion()
 void GalilControllerInterface::Close() {
 
     if (m_galil){
+        CMN_LOG_CLASS_RUN_VERBOSE << "Closing Galil controller" << std::endl;
         SendCommand("ST");
         DisableAllMotorPower();
         GClose(m_galil);
         delete m_galil;
-    }
-    else {
-        throw ExcpSystemError("Controller connection already Closed:");
     }
 }
 
@@ -185,7 +183,7 @@ bool GalilControllerInterface::Init(const std::string & deviceName)
     }
 
     // Add the instances
-    GalilControllerInterfaceFactory::s_instances.insert({deviceName, this});
+    GalilControllerInterfaceFactory::s_instances.insert({deviceName, std::shared_ptr<GalilControllerInterface>(this)});
 
     // Enable motor power.  This will fail if the EStop switch is pressed,
     // but that isn't considered an error at this point.
@@ -961,7 +959,7 @@ bool DemoGalilControllerInterface::Init( const std::string& deviceName)
     std::cout << "Hello Demo Galil from: " << deviceName << std::endl;
     CMN_LOG_CLASS_RUN_VERBOSE << "Hello Demo Galil from: " << deviceName << std::endl;
 
-    GalilControllerInterfaceFactory::s_instances.insert({deviceName, this});
+    GalilControllerInterfaceFactory::s_instances.insert({deviceName, std::shared_ptr<DemoGalilControllerInterface>(this)});
 
     return true;
 }

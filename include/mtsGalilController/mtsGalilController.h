@@ -17,7 +17,7 @@ class CISST_EXPORT mtsGalilController : public mtsTaskPeriodic
         mtsGalilController(const std::string & componentName, double period_secs);
         mtsGalilController(const mtsTaskPeriodicConstructorArg & arg);
 
-        ~mtsGalilController() {}
+        ~mtsGalilController();
 
         void Configure(const std::string & fileName) override;
         void Startup(void) override;
@@ -41,7 +41,7 @@ class CISST_EXPORT mtsGalilController : public mtsTaskPeriodic
         float m_timeout = 60.0 * cmn_s; 
 
     private:
-        GalilControllerInterface* m_galilController;
+        std::shared_ptr<GalilControllerInterface> m_galilController;
 
 }; // class: mtsGalilControllerSensorFeedback_Templated
 

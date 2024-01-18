@@ -2,7 +2,7 @@
 #include "mtsGalilController/GalilControllerInterface.h"
 
 
-CMN_IMPLEMENT_SERVICES_DERIVED(mtsGalilController, mtsTaskPeriodic);
+CMN_IMPLEMENT_SERVICES(mtsGalilController);
 
 #define MTS_ADD_COMMAND_CHECK( AddCommandFunc, interface, function, object, name) \
     if (!interface->AddCommandFunc(function, object, name)) \
@@ -15,19 +15,25 @@ CMN_IMPLEMENT_SERVICES_DERIVED(mtsGalilController, mtsTaskPeriodic);
 #define MTS_ADD_COMMAND_VOID_CHECK(...) MTS_ADD_COMMAND_CHECK(AddCommandVoid, ##__VA_ARGS__)
 #define MTS_ADD_COMMAND_WRITE_CHECK(...) MTS_ADD_COMMAND_CHECK(AddCommandWrite, ##__VA_ARGS__)
 
-mtsGalilController::mtsGalilController(const std::string & componentName, double period_secs) : mtsTaskPeriodic(componentName, period_secs), m_StateTable(50, "GalilState")
+mtsGalilController::mtsGalilController(const std::string & componentName, double period_secs) : mtsTaskPeriodic(componentName, period_secs), m_StateTable(10000, "GalilState")
 {
     SetupInterfaces();
 }
 
-mtsGalilController::mtsGalilController(const mtsTaskPeriodicConstructorArg & arg) : mtsTaskPeriodic(arg), m_StateTable(50, "GalilState")
+mtsGalilController::mtsGalilController(const mtsTaskPeriodicConstructorArg & arg) : mtsTaskPeriodic(arg), m_StateTable(10000, "GalilState")
 {
     SetupInterfaces();
+}
+
+mtsGalilController::~mtsGalilController()
+{
+    if (m_galilController.get())
+        m_galilController.reset();
 }
 
 void mtsGalilController::Configure(const std::string & fileName)
 {
-    m_galilController = GalilControllerInterfaceFactory::GetControllerInterface<DemoGalilControllerInterface>(fileName);
+    m_galilController = GalilControllerInterfaceFactory::GetControllerInterface("demo");
     
 }
 
@@ -62,32 +68,32 @@ void mtsGalilController::SetupInterfaces()
     }
 
     // Galil commands
-    MTS_ADD_COMMAND_VOID_CHECK(intfProvided,  &GalilControllerInterface::AbortProgram,  m_galilController, "AbortProgram");
-    MTS_ADD_COMMAND_VOID_CHECK(intfProvided,  &GalilControllerInterface::AbortMotion,   m_galilController, "AbortMotion");
-    MTS_ADD_COMMAND_VOID_CHECK(intfProvided,  &GalilControllerInterface::Reset,         m_galilController, "Reset");
-    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::Home,          m_galilController, "Home");
-    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::UnHome,        m_galilController, "UnHome");
+    MTS_ADD_COMMAND_VOID_CHECK(intfProvided,  &GalilControllerInterface::AbortProgram,  m_galilController.get(), "AbortProgram");
+    MTS_ADD_COMMAND_VOID_CHECK(intfProvided,  &GalilControllerInterface::AbortMotion,   m_galilController.get(), "AbortMotion");
+    MTS_ADD_COMMAND_VOID_CHECK(intfProvided,  &GalilControllerInterface::Reset,         m_galilController.get(), "Reset");
+    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::Home,          m_galilController.get(), "Home");
+    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::UnHome,        m_galilController.get(), "UnHome");
 
-    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::SetAcceleration,     m_galilController, "SetAccleration");
-    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::SetDeceleration,     m_galilController, "SetDecleration");
-    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::SetSpeed,            m_galilController, "SetSpeed");
+    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::SetAcceleration,     m_galilController.get(), "SetAccleration");
+    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::SetDeceleration,     m_galilController.get(), "SetDecleration");
+    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::SetSpeed,            m_galilController.get(), "SetSpeed");
     
-    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::SetAbsolutePosition, m_galilController, "SetAbsolutePosition");
-    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::SetPositionMove,     m_galilController, "SetPositionMove");
-    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::SetVelocityMove,     m_galilController, "SetVelocityMove");
+    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::SetAbsolutePosition, m_galilController.get(), "SetAbsolutePosition");
+    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::SetPositionMove,     m_galilController.get(), "SetPositionMove");
+    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::SetVelocityMove,     m_galilController.get(), "SetVelocityMove");
     
-    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::EnableMotorPower,     m_galilController, "EnableMotorPower");
-    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::DisableMotorPower,    m_galilController, "DisableMotorPower");
-    MTS_ADD_COMMAND_VOID_CHECK(intfProvided,  &GalilControllerInterface::EnableAllMotorPower,  m_galilController, "EnableAllMotorPower");
-    MTS_ADD_COMMAND_VOID_CHECK(intfProvided,  &GalilControllerInterface::DisableAllMotorPower, m_galilController, "DisableAllMotorPower");
+    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::EnableMotorPower,     m_galilController.get(), "EnableMotorPower");
+    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::DisableMotorPower,    m_galilController.get(), "DisableMotorPower");
+    MTS_ADD_COMMAND_VOID_CHECK(intfProvided,  &GalilControllerInterface::EnableAllMotorPower,  m_galilController.get(), "EnableAllMotorPower");
+    MTS_ADD_COMMAND_VOID_CHECK(intfProvided,  &GalilControllerInterface::DisableAllMotorPower, m_galilController.get(), "DisableAllMotorPower");
     
-    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::StopMotion,    m_galilController, "StopMotion");
-    MTS_ADD_COMMAND_VOID_CHECK(intfProvided,  &GalilControllerInterface::StopMotionAll, m_galilController, "StopMotionAll");
+    MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &GalilControllerInterface::StopMotion,    m_galilController.get(), "StopMotion");
+    MTS_ADD_COMMAND_VOID_CHECK(intfProvided,  &GalilControllerInterface::StopMotionAll, m_galilController.get(), "StopMotionAll");
     
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::StopMovement, this, "StopMovement");
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::WaitMotion,   this, "WaitMotion");
 
-    MTS_ADD_COMMAND_READ_CHECK(intfProvided, &GalilControllerInterface::GetAnalogInputs, m_galilController, "GetAnalogInputs");
+    MTS_ADD_COMMAND_READ_CHECK(intfProvided, &GalilControllerInterface::GetAnalogInputs, m_galilController.get(), "GetAnalogInputs");
 
     delete intfProvided;
 }
@@ -99,8 +105,9 @@ void mtsGalilController::Startup(){
 
 
 void mtsGalilController::Run(){
-    this->ProcessQueuedCommands();
     this->ProcessQueuedEvents();
+    // this->ProcessQueuedCommands();
+
     
     if (!m_galilController)
         return;
@@ -119,6 +126,7 @@ void mtsGalilController::Cleanup(){
     try {
         m_galilController->Close();
         CMN_LOG_CLASS_RUN_VERBOSE << "Closed Galil Controller." << std::endl;
+        m_galilController.reset();
     }
     catch (GalilControllerInterface::ExcpSystemError e)
     {
