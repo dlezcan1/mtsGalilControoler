@@ -17,12 +17,27 @@ int main(int argc, char* argv[])
     mtsGalilController* galil_task = new mtsGalilController("GalilTask", 500.0 * cmn_ms);
     cmnLogger::SetMaskClass("mtsGalilController", CMN_LOG_ALLOW_ALL);
 
-    galil_task->Configure("192.168.1.11");
+    // Add option parsing
+    cmnCommandLineOptions options;
+    std::string jsonGalilConfigFile;
+
+    options.AddOptionOneValue(
+        "j", "json-config",
+        "json configuration file for galil controller",
+        cmnCommandLineOptions::REQUIRED_OPTION, 
+        &jsonGalilConfigFile
+    );
+
+    if (!options.Parse(argc, argv, std::cerr))
+        return -1;
+
+    std::cout << "Using config file: \"" << jsonGalilConfigFile << "\"\n";
+
+    // Configure the task(s)
+    galil_task->Configure(jsonGalilConfigFile);
 
     // Add components
     componentManager->AddComponent(galil_task);
-
-    // connect components
 
     // Create components
     componentManager->CreateAll();

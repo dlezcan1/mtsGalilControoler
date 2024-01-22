@@ -1,6 +1,6 @@
 #include "mtsGalilController/mtsGalilController.h"
-#include "mtsGalilController/GalilControllerInterface.h"
 
+#include "cisstCommon/cmnDataFormat.h"
 
 CMN_IMPLEMENT_SERVICES(mtsGalilController);
 
@@ -27,13 +27,100 @@ mtsGalilController::mtsGalilController(const mtsTaskPeriodicConstructorArg & arg
 
 mtsGalilController::~mtsGalilController()
 {
-    if (m_galilController.get())
-        m_galilController.reset();
 }
 
-void mtsGalilController::Configure(const std::string & fileName)
+void mtsGalilController::Configure(const std::string& fileName)
 {
-    m_galilController = GalilControllerInterfaceFactory::GetControllerInterface("demo");
+    std::string deviceName = "demo";
+    auto deviceInterface   = GalilControllerInterfaceFactory::Interface::DEMO;
+
+    std::string dmcStartupFile;
+    
+    try
+    {
+        std::ifstream jsonStream;
+        Json::Value   jsonConfig;
+        Json::Reader  jsonReader;
+
+        jsonStream.open(fileName.c_str());
+
+        if (!jsonReader.parse(jsonStream, jsonConfig)) {
+            CMN_LOG_CLASS_INIT_ERROR << "Configure " << this->GetName()
+                                     << ": failed to parse galil controller configuration file \""
+                                     << fileName << "\"\n"
+                                     << jsonReader.getFormattedErrorMessages();
+            return;
+        }
+
+        CMN_LOG_CLASS_INIT_VERBOSE << "Configure: " << this->GetName()
+                                   << " using file \"" << fileName << "\"" << std::endl
+                                   << "----> content of galil controller configuration file: " << std::endl
+                                   << jsonConfig << std::endl
+                                   << "<----" << std::endl;
+
+    if (jsonConfig.isMember("IP_Address"))
+            deviceName = jsonConfig["IP_Address"].asString();
+
+
+        if (jsonConfig.isMember("Controller_Interface"))
+        {
+            std::string controllerInterface = jsonConfig["Controller_Interface"].asString();
+            std::transform(
+                controllerInterface.begin(),
+                controllerInterface.end(),
+                controllerInterface.begin(),
+                [] (unsigned char c) {return std::tolower(c);}
+
+            );
+
+            deviceInterface = GalilControllerInterfaceFactory::CONTROLLER; // if present value, assume it is a real controller
+            if ( controllerInterface == "demo")
+                deviceInterface = GalilControllerInterfaceFactory::Interface::DEMO;
+        }
+
+        
+        if (jsonConfig.isMember("DMC_Startup_Program"))
+        {
+            std::cout << "Before dmcStartupFile addition\n";
+            dmcStartupFile = jsonConfig["DMC_Startup_Program"].asString();
+            std::cout << "After dmcStartupFile addition: " << dmcStartupFile << std::endl;
+        }
+
+    }
+    catch (...)
+    {
+        CMN_LOG_CLASS_INIT_ERROR << "Configure " << this->GetName() 
+                                 << ": make sure the file \""
+                                 << fileName << "\" is in JSON format"
+                                 << std::endl;
+    }
+
+
+    // create the controller interface
+    m_galilController = GalilControllerInterfaceFactory::GetControllerInterface(
+        deviceName,
+        deviceInterface
+    );
+
+
+    // upload a dmc program file if available
+    if (dmcStartupFile.length() > 0)
+    {
+        std::ifstream testFile(dmcStartupFile);
+        if (testFile.good())
+        {
+            std::cout << "After testFile is good\n";
+            m_galilController->ProgramUploadFile(dmcStartupFile);
+        }
+        else
+        {
+            CMN_LOG_CLASS_INIT_ERROR << "Configure " << this->GetName() << ": "
+                                     << "No dmc program file exists: \""
+                                     << dmcStartupFile
+                                     << "\""
+                                     << std::endl;;
+        }
+    }
     
 }
 

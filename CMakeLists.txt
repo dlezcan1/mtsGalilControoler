@@ -14,6 +14,8 @@ project (mts_galil_controller VERSION 0.0.0)
 
 include_directories (include)
 
+add_subdirectory (share)
+
 # create a list of required cisst libraries
 set (REQUIRED_CISST_LIBRARIES 
     cisstCommon

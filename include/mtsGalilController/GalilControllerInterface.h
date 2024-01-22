@@ -286,16 +286,32 @@ CMN_DECLARE_SERVICES_INSTANTIATION(DemoGalilControllerInterface);
 class GalilControllerInterfaceFactory {
 public:
 
-    static std::shared_ptr<GalilControllerInterface> GetControllerInterface(const std::string& deviceName)
+    enum Interface
+    {
+        DEMO = 0,
+        CONTROLLER
+    };
+
+    static std::shared_ptr<GalilControllerInterface> GetControllerInterface(const std::string& deviceName, const Interface& interface)
     {
         if (s_instances.count(deviceName) > 0)
             return s_instances[deviceName];
 
         std::shared_ptr<GalilControllerInterface> gc;
-        if (deviceName.compare("demo"))
-            gc = std::make_shared<DemoGalilControllerInterface>();
-        else
-            gc = std::make_shared<DemoGalilControllerInterface>();
+        switch (interface)
+        {
+            case Interface::DEMO:
+                gc = std::make_shared<DemoGalilControllerInterface>();
+                break;
+
+            case Interface::CONTROLLER:
+                gc = std::make_shared<GalilControllerInterface>();
+                break;
+
+            default:
+                throw std::invalid_argument("Galil controller Interface: is not implemented!");
+        }    
+        
 
         gc->Init(deviceName);
 
