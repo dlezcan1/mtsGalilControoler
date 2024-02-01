@@ -59,32 +59,32 @@ void mtsGalilController::Configure(const std::string& fileName)
                                    << "<----" << std::endl;
 
     if (jsonConfig.isMember("IP_Address"))
-            deviceName = jsonConfig["IP_Address"].asString();
+        deviceName = jsonConfig["IP_Address"].asString();
 
 
-        if (jsonConfig.isMember("Controller_Interface"))
-        {
-            std::string controllerInterface = jsonConfig["Controller_Interface"].asString();
-            std::transform(
-                controllerInterface.begin(),
-                controllerInterface.end(),
-                controllerInterface.begin(),
-                [] (unsigned char c) {return std::tolower(c);}
+    if (jsonConfig.isMember("Controller_Interface"))
+    {
+        std::string controllerInterface = jsonConfig["Controller_Interface"].asString();
+        std::transform(
+            controllerInterface.begin(),
+            controllerInterface.end(),
+            controllerInterface.begin(),
+            [] (unsigned char c) {return std::tolower(c);}
 
-            );
+        );
 
-            deviceInterface = GalilControllerInterfaceFactory::CONTROLLER; // if present value, assume it is a real controller
-            if ( controllerInterface == "demo")
-                deviceInterface = GalilControllerInterfaceFactory::Interface::DEMO;
-        }
+        deviceInterface = GalilControllerInterfaceFactory::CONTROLLER; // if present value, assume it is a real controller
+        if ( controllerInterface == "demo")
+            deviceInterface = GalilControllerInterfaceFactory::Interface::DEMO;
+    }
 
-        
-        if (jsonConfig.isMember("DMC_Startup_Program"))
-        {
-            std::cout << "Before dmcStartupFile addition\n";
-            dmcStartupFile = jsonConfig["DMC_Startup_Program"].asString();
-            std::cout << "After dmcStartupFile addition: " << dmcStartupFile << std::endl;
-        }
+    
+    if (jsonConfig.isMember("DMC_Startup_Program"))
+    {
+        std::cout << "Before dmcStartupFile addition\n";
+        dmcStartupFile = jsonConfig["DMC_Startup_Program"].asString();
+        std::cout << "After dmcStartupFile addition: " << dmcStartupFile << std::endl;
+    }
 
     }
     catch (...)
