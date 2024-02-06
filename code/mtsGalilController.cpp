@@ -120,7 +120,6 @@ void mtsGalilController::Configure(const std::string& fileName)
                                      << "\""
                                      << std::endl;;
         }
-        testFile.close();
     }
     
 }
