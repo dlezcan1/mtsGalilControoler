@@ -182,6 +182,15 @@ public:
     enum DataRecordMethod { QR, DR };
     GDataRecord RecordData(const DataRecordMethod& method = DataRecordMethod::QR);
 
+    mtsDoubleVec GetEncoderCountConversionFactors() const { return m_EncoderCountsPerUnit; }
+    void         SetEncoderCountConversionFactors(const mtsDoubleVec& conversionFactors) { assert(conversionFactors.size() == m_EncoderCountsPerUnit.size()); m_EncoderCountsPerUnit = conversionFactors;}
+    void         SetEncoderCountConversionFactors(const prmMaskedDoubleVec& conversionFactors);
+    
+    prmMaskedIntVec    ConvertAxisUnitToEncoderCountsRounded(const prmMaskedDoubleVec& axisUnits) const;
+    prmMaskedDoubleVec ConvertAxisUnitToEncoderCounts(const prmMaskedDoubleVec& axisUnits) const;
+    prmMaskedDoubleVec ConvertEncoderCountsToAxisUnit(const prmMaskedDoubleVec& encoderCounts) const;
+    prmMaskedDoubleVec ConvertEncoderCountsToAxisUnit(const prmMaskedIntVec& encoderCounts) const;
+
 
     /*	
     inline void GetActuatorParameters(mtsVector<prmGalilActuatorParameters> &actuatorParameters) const CISST_THROW() 
@@ -233,9 +242,10 @@ private:
     // Returns:  the robot status
     long VerifyStatus(const char *callerName, long statusMask);
 
+    mtsDoubleVec m_EncoderCountsPerUnit; // The encoder counts per unit (m, mm, rads, revolutions, etc.)
+
     //////-----	Motion commands   -----//////
     //  (all positions are in COUNTS and are relative to the ACTUATOR HOME position).
-
     // All the mtsVectors are going to be the size of the MAX_
     mtsBoolVec	 m_IsHomed;  // TRUE if actuator IsHomed
     mtsDoubleVec m_AnalogInput;
