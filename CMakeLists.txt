@@ -47,11 +47,9 @@ catkin_package(
 )
 
 set ( mtsGalilController_HEADER_FILES
-    include/mtsGalilController/GalilControllerInterface.h
     include/mtsGalilController/mtsGalilController.h
 )
 set ( mtsGalilController_SOURCE_FILES
-    code/GalilControllerInterface.cpp
     code/mtsGalilController.cpp
 )
 
@@ -94,12 +92,6 @@ if (cisst_FOUND_AS_REQUIRED)
         -lgclib
         -lgclibo                  
     )
-
-    add_executable(mtsGalilController_Test 
-        code/main.cpp
-    )
-    target_link_libraries(mtsGalilController_Test mtsGalilController ${catkin_LIBRARIES})
-    cisst_target_link_libraries(mtsGalilController_Test ${REQUIRED_CISST_LIBRARIES})
 
     # Install target for headers and library
     install (
