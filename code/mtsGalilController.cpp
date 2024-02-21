@@ -1247,7 +1247,7 @@ template <typename T> prmMaskedVector<T> mtsGalilController::RemapAxisValues(con
 {
     prmMaskedVector<T> galilValues(m_AxisToGalilChannelMappings.MaxElement());
 
-    for (size_t idxGalil = 0; idxGalil < galilValues.size(); idxGalil++)
+    for (size_t idxGalil = 0; idxGalil < galilValues.Data().size(); idxGalil++)
     {
         bool   idxGalilValid;
         size_t idxAxis = RemapGalilIndex(idxGalil, idxGalilValid);
@@ -1266,7 +1266,7 @@ template <typename T> prmMaskedVector<T> mtsGalilController::RemapAxisValues(con
 {
     prmMaskedVector<T> galilValues(m_AxisToGalilChannelMappings.MaxElement());
 
-    for (size_t idxGalil = 0; idxGalil < galilValues.size(); idxGalil++)
+    for (size_t idxGalil = 0; idxGalil < galilValues.Data().size(); idxGalil++)
     {
         bool   idxGalilValid;
         size_t idxAxis = RemapGalilIndex(idxGalil, idxGalilValid);
