@@ -1,5 +1,18 @@
 {
     "IP_Address": "192.168.1.11",
-    "Controller_Interface": "demo",
-    "DMC_Startup_Program": "Does/not/exist"
+    "DMC_Startup_Program": "Does/not/exist",
+    "Axes": [
+        {
+            "Galil_Axis_Index": 1,
+            "Encoder_Conversion": 2.0
+        },
+        {
+            "Galil_Axis_Index": 0,
+            "Encoder_Conversion": 0.5
+        },
+        {
+            "Galil_Axis_Index": 2,
+            "Encoder_Conversion": 3.0
+        }
+    ]
 }

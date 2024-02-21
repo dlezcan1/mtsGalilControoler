@@ -140,9 +140,26 @@ public:
     void SetEncoderCountConversionFactors(const prmMaskedDoubleVec &conversionFactors);
 
     prmMaskedIntVec    ConvertAxisUnitToEncoderCountsRounded(const prmMaskedDoubleVec &axisUnits) const;
-    prmMaskedDoubleVec ConvertAxisUnitToEncoderCounts(const prmMaskedDoubleVec &axisUnits) const;
+    vctIntVec          ConvertAxisUnitToEncoderCountsRounded(const vctDoubleVec &axisUnits) const
+    {
+        return ConvertAxisUnitToEncoderCountsRounded(prmMaskedDoubleVec(axisUnits, vctBoolVec(axisUnits.size(), true))).Data();
+    }
+    prmMaskedDoubleVec ConvertAxisUnitToEncoderCounts(const prmMaskedDoubleVec &axisUnits) const; 
+    vctDoubleVec       ConvertAxisUnitToEncoderCounts(const vctDoubleVec &axisUnits) const
+    {
+        return ConvertAxisUnitToEncoderCounts(prmMaskedDoubleVec(axisUnits, vctBoolVec(axisUnits.size(), true))).Data();
+    }
+    
     prmMaskedDoubleVec ConvertEncoderCountsToAxisUnit(const prmMaskedDoubleVec &encoderCounts) const;
     prmMaskedDoubleVec ConvertEncoderCountsToAxisUnit(const prmMaskedIntVec &encoderCounts) const;
+    vctDoubleVec       ConvertEncoderCountsToAxisUnit(const vctDoubleVec &encoderCounts) const 
+    {
+        return ConvertEncoderCountsToAxisUnit(prmMaskedDoubleVec(encoderCounts, vctBoolVec(encoderCounts.size(), true))).Data();
+    }
+    vctDoubleVec       ConvertEncoderCountsToAxisUnit(const vctIntVec &encoderCounts) const 
+    {
+        return ConvertEncoderCountsToAxisUnit(prmMaskedIntVec(encoderCounts, vctBoolVec(encoderCounts.size(), true))).Data();
+    }
 
 protected:
     void Init(void);
@@ -158,10 +175,12 @@ protected:
     void CreateCommandForAxis(char *buffer, const char *galilCmd, const vctBoolVec &mask);
 
     // converts commanded values to the actual galil controller mappings
+    inline size_t GetNumberActuators() { return m_AxisToGalilChannelMappings.size(); }
     unsigned int RemapAxisIndex(const unsigned int index);
-    template <typename T> vctDynamicVector<T> RemapAxisValues(const vctDynamicVector<T>& commandValues);
-    template <typename T> prmMaskedVector<T> RemapAxisValues(const prmMaskedVector<T>& commandValues);
-    inline size_t GetNumberActuators() { return m_AxisChannelMappings.size(); }
+    unsigned int RemapGalilIndex(const unsigned int index, bool& valid);
+    vctBoolVec RemapAxisMask(const vctBoolVec& axisMask);
+    template <typename T> prmMaskedVector<T> RemapAxisValues(const vctDynamicVector<T>& axisValues);
+    template <typename T> prmMaskedVector<T> RemapAxisValues(const prmMaskedVector<T>& axisValues);
 
     // Galil Controller containers
     //helper command variables in accessing data record elements
@@ -191,31 +210,20 @@ private:
     static GCStringOut BufferToGCStringOut(char* buffer, unsigned int buffer_size);
 
     void ConnectToGalilController(const std::string& deviceName);
-    
-    // Internal functions
-    // Read configuration file (configuration file name could be added as
-    // a parameter)
-    void ReadConfigFile(const std::string &fileName ) CISST_THROW(ExcpSystemError);
-
-    // Check status and raise exception if not valid.
-    // callerName -- name of calling function (for debug purposes)
-    // statusMask -- mask to indicate which status fields to check
-    // Returns:  the robot status
-    long VerifyStatus(const char *callerName, long statusMask);
-
-    vctDoubleVec m_EncoderCountsPerUnit; // The encoder counts per unit (m, mm, rads, revolutions, etc.)
 
     //////-----	Motion commands   -----//////
     //  (all positions are in COUNTS and are relative to the ACTUATOR HOME position).
     // All the mtsVectors are going to be the size of the MAX_
-    mtsBoolVec	 m_IsHomed;  // TRUE if actuator IsHomed
-    mtsDoubleVec m_AnalogInput;
+    vctBoolVec	 m_IsHomed;  // TRUE if actuator IsHomed
+    vctDoubleVec m_AnalogInput;
 
     // Disha-encoder
-    vctIntVec  m_DigitalInput;
-    cmnInt     m_DecPosition;
-    cmnUInt    m_MotionMode; //indicates the type of config file loaded;
-    vctUIntVec m_AxisChannelMappings;
+    vctIntVec        m_DigitalInput;
+    cmnInt           m_DecPosition;
+    cmnUInt          m_MotionMode; //indicates the type of config file loaded;
+    vctDoubleVec     m_EncoderCountsPerUnit; // The encoder counts per unit (m, mm, rads, revolutions, etc.)
+    vctUIntVec       m_AxisToGalilChannelMappings;
+    prmMaskedUIntVec m_GalilToAxisChannelMappings;
 
     // galil controller class handle
     GCon         m_Galil;

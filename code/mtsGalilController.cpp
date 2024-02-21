@@ -29,6 +29,7 @@ mtsGalilController::mtsGalilController(const mtsTaskPeriodicConstructorArg & arg
 
 mtsGalilController::~mtsGalilController()
 {
+    Close();
 }
 
 void mtsGalilController::Configure(const std::string& fileName)
@@ -57,30 +58,31 @@ void mtsGalilController::Configure(const std::string& fileName)
                                    << jsonConfig << std::endl
                                    << "<----" << std::endl;
 
-    if (jsonConfig.isMember("IP_Address"))
+
         m_DeviceName = jsonConfig["IP_Address"].asString();
 
+        // Configure the axes
+        Json::Value axesConfig = jsonConfig["Axes"];
+        for (auto it = axesConfig.begin(); it != axesConfig.end(); it++)
+        {
+            unsigned int axisIndex = it.index();
 
-    if (jsonConfig.isMember("Controller_Interface"))
-    {
-        std::string controllerInterface = jsonConfig["Controller_Interface"].asString();
-        std::transform(
-            controllerInterface.begin(),
-            controllerInterface.end(),
-            controllerInterface.begin(),
-            [] (unsigned char c) {return std::tolower(c);}
+            unsigned int galilIndex  = it->get("Galil_Axis_Index", axisIndex).asUInt();
+            double encoderConversion = it->get("Encoder_Conversion", 1.0).asDouble();
 
-        );
-    }
-
-    
-    if (jsonConfig.isMember("DMC_Startup_Program"))
-    {
-        std::cout << "Before dmcStartupFile addition\n";
-        dmcStartupFile = jsonConfig["DMC_Startup_Program"].asString();
-        std::cout << "After dmcStartupFile addition: " << dmcStartupFile << std::endl;
-    }
-
+            m_EncoderCountsPerUnit[axisIndex]               = encoderConversion;
+            m_AxisToGalilChannelMappings[axisIndex]         = galilIndex;
+            m_GalilToAxisChannelMappings.Data()[galilIndex] = axisIndex;
+            m_GalilToAxisChannelMappings.Mask()[galilIndex] = true;
+        }
+        
+        // Galil Startup Program
+        if (jsonConfig.isMember("DMC_Startup_Program"))
+        {
+            std::cout << "Before dmcStartupFile addition\n";
+            dmcStartupFile = jsonConfig["DMC_Startup_Program"].asString();
+            std::cout << "After dmcStartupFile addition: " << dmcStartupFile << std::endl;
+        }
     }
     catch (...)
     {
@@ -397,7 +399,7 @@ void mtsGalilController::EnableMotorPower(const mtsBoolVec &mask)
 void mtsGalilController::DisableMotorPower(const mtsBoolVec &mask)
 {
     CMN_LOG_CLASS_RUN_VERBOSE << "DisableMotorPower \"" << mask << "\"" << std::endl;
-    try
+        try
     {
         StopMotion(mask);
         char buffer[G_SMALL_BUFFER];
@@ -431,7 +433,7 @@ void mtsGalilController::StopMotionAll()
 void mtsGalilController::StopMotion(const mtsBoolVec &mask)
 {
     CMN_LOG_CLASS_RUN_VERBOSE << "Stop \"" << mask << "\"" << std::endl;
-
+    
     try
     {
         if (mask.Equal(false))
@@ -712,6 +714,10 @@ void mtsGalilController::GetActuatorState(prmActuatorState &state)
         CMN_LOG_CLASS_RUN_ERROR << "GetActuatorState: Error  \"" << e << "\"" << std::endl;
         cmnThrow(std::runtime_error("GetActuatorState: Error "));
     }
+
+    // unit conversions
+    state.Position() = ConvertEncoderCountsToAxisUnit(state.Position());
+    state.Velocity() = ConvertEncoderCountsToAxisUnit(state.Velocity());
 }
 
 void mtsGalilController::GetAnalogInputs(mtsDoubleVec &ain) const
@@ -1061,17 +1067,20 @@ void mtsGalilController::CreateCommand(char *buffer,
     long bufpos;
     bufpos = sprintf(buffer, "%s", galilCmd);
 
+    prmMaskedDoubleVec cmdParamAxis(cmdParam, mask);
+    prmMaskedDoubleVec cmdParamGalil = RemapAxisValues(cmdParamAxis); // remap to galil space
+
     unsigned int ii;
-    for (ii = 0; ii < mask.size() - 1; ii++)
+    for (ii = 0; ii < cmdParamGalil.Mask().size() - 1; ii++)
     {
-        if (mask[ii])
-            bufpos += sprintf(buffer + bufpos, "%f,", cmdParam[ii]);
+        if (cmdParamGalil.Mask()[ii])
+            bufpos += sprintf(buffer + bufpos, "%f,", cmdParamGalil.Data()[ii]);
         else
             bufpos += sprintf(buffer + bufpos, ",");
     }
     if (mask[ii])
     {
-        sprintf(buffer + bufpos, "%f", cmdParam[cmdParam.size() - 1]);
+        sprintf(buffer + bufpos, "%f", cmdParamGalil.Data()[cmdParamGalil.Data().size() - 1]);
         // else don't add anything so it is not set.
     }
 }
@@ -1086,16 +1095,19 @@ void mtsGalilController::CreateCommandLong(char *buffer,
     long bufpos;
     bufpos = sprintf(buffer, "%s", galilCmd);
     unsigned int ii;
-    for (ii = 0; ii < mask.size() - 1; ii++)
+    prmMaskedDoubleVec cmdParamAxis(cmdParam, mask);
+    prmMaskedDoubleVec cmdParamGalil = RemapAxisValues(cmdParamAxis); // remap to galil space
+
+    for (ii = 0; ii < cmdParamGalil.Mask().size() - 1; ii++)
     {
-        if (mask[ii])
-            bufpos += sprintf(buffer + bufpos, "%ld,", (long)cmdParam[ii]);
+        if (cmdParamGalil.Mask()[ii])
+            bufpos += sprintf(buffer + bufpos, "%ld,", (long)cmdParamGalil.Data()[ii]);
         else
             bufpos += sprintf(buffer + bufpos, ",");
     }
-    if (mask[ii])
+    if (cmdParamGalil.Mask()[ii])
     {
-        sprintf(buffer + bufpos, "%ld", (long)cmdParam[cmdParam.size() - 1]);
+        sprintf(buffer + bufpos, "%ld", (long)cmdParamGalil.Data()[cmdParamGalil.Data().size() - 1]);
         // else don't add anything so it is not set.
     }
 }
@@ -1109,10 +1121,12 @@ void mtsGalilController::CreateCommandForAxis(char *buffer,
     // Note a blank mask calls the command for all axis. (has some undesirable side effects for ST command)
     long bufpos;
     bufpos = sprintf(buffer, "%s ", galilCmd);
-    unsigned int ii;
-    for (ii = 0; ii < mask.size(); ii++)
+
+    vctBoolVec maskGalil = RemapAxisMask(mask);
+    
+    for (unsigned int ii = 0; ii < maskGalil.size(); ii++)
     {
-        if (mask[ii])
+        if (maskGalil[ii])
         {
             bufpos += sprintf(buffer + bufpos, "%c", 'A' + ii); // A+next char
         }
@@ -1220,26 +1234,65 @@ prmMaskedDoubleVec mtsGalilController::ConvertEncoderCountsToAxisUnit(const prmM
 
 unsigned int mtsGalilController::RemapAxisIndex(const unsigned int index)
 {
-    return m_AxisChannelMappings[index];
+    return m_AxisToGalilChannelMappings[index];
 }
-template <typename T> vctDynamicVector<T> mtsGalilController::RemapAxisValues(const vctDynamicVector<T>& axisValues)
-{
-    vctDynamicVector<T> galilValues(axisValues.size());
 
-    for (size_t idxAxis = 0; idxAxis < axisValues.size(); idxAxis++)
+unsigned int mtsGalilController::RemapGalilIndex(const unsigned int index, bool& valid)
+{
+    valid = m_GalilToAxisChannelMappings.Mask()[index];
+    return m_GalilToAxisChannelMappings.Data()[index];
+}
+
+template <typename T> prmMaskedVector<T> mtsGalilController::RemapAxisValues(const vctDynamicVector<T>& axisValues)
+{
+    prmMaskedVector<T> galilValues(m_AxisToGalilChannelMappings.MaxElement());
+
+    for (size_t idxGalil = 0; idxGalil < galilValues.size(); idxGalil++)
     {
-        size_t idxGalil       = RemapAxisIndex(m_AxisChannelMappings);
-        galilValues[idxGalil] = axisValues[idxAxis];
+        bool   idxGalilValid;
+        size_t idxAxis = RemapGalilIndex(idxGalil, idxGalilValid);
+
+        if (!idxGalilValid)
+            continue;
+
+        galilValues.Data()[idxGalil] = axisValues[idxAxis];
+        galilValues.Mask()[idxGalil] = true;
     }
 
     return galilValues;
 }
+
 template <typename T> prmMaskedVector<T> mtsGalilController::RemapAxisValues(const prmMaskedVector<T>& axisValues)
 {
-    prmMaskedVector<T> galilValues(
-        RemapAxisValues(axisValues.GetData()),
-        RemapAxisValues(axisValues.GetMask()),
-    );
+    prmMaskedVector<T> galilValues(m_AxisToGalilChannelMappings.MaxElement());
+
+    for (size_t idxGalil = 0; idxGalil < galilValues.size(); idxGalil++)
+    {
+        bool   idxGalilValid;
+        size_t idxAxis = RemapGalilIndex(idxGalil, idxGalilValid);
+
+        if (!idxGalilValid)
+            continue;
+
+        galilValues.Data()[idxGalil] = axisValues.Data()[idxAxis];
+        galilValues.Mask()[idxGalil] = axisValues.Mask()[idxAxis];
+    }
 
     return galilValues;
+}
+
+vctBoolVec mtsGalilController::RemapAxisMask(const vctBoolVec& axisMask)
+{
+    vctBoolVec galilMask(m_AxisToGalilChannelMappings.MaxElement());
+
+    for (size_t idxGalil = 0; idxGalil < galilMask.size(); idxGalil++)
+    {
+        bool   idxGalilValid;
+        size_t idxAxis = RemapGalilIndex(idxGalil, idxGalilValid);
+
+        if (!idxGalilValid)
+            continue;
+
+        galilMask[idxGalil] = axisMask[idxGalil];
+    }
 }
