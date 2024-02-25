@@ -28,8 +28,10 @@ class GalilClient : public mtsTaskMain {
 private:
     prmActuatorState m_ActuatorState;
 
+    mtsFunctionRead GetConnected;
     mtsFunctionRead GetActuatorState;
     mtsFunctionWrite SendCommand;
+    mtsFunctionWriteReturn SendCommandRet;
 
 public:
 
@@ -37,8 +39,10 @@ public:
     {
         mtsInterfaceRequired *req = AddInterfaceRequired("Input", MTS_OPTIONAL);
         if (req) {
+            req->AddFunction("GetConnected", GetConnected);
             req->AddFunction("GetActuatorState", GetActuatorState);
             req->AddFunction("SendCommand", SendCommand);
+            req->AddFunction("SendCommandRet", SendCommandRet);
         }
     }
 
@@ -61,6 +65,8 @@ public:
 
         ProcessQueuedEvents();
 
+        bool galilOK;
+        GetConnected(galilOK);
         GetActuatorState(m_ActuatorState);
 
         char c = 0;
@@ -69,11 +75,16 @@ public:
             switch (c) {
 
             case 'c':
-                {
-                std::string cmdString;
-                std::cout << std::endl << "Enter command: ";
-                std::cin >> cmdString;
-                SendCommand(cmdString);
+                if (galilOK) {
+                    std::string cmdString;
+                    std::string retString;
+                    std::cout << std::endl << "Enter command: ";
+                    std::cin >> cmdString;
+                    SendCommandRet(cmdString, retString);
+                    std::cout << std::endl << "Return: " << retString << std::endl;
+                }
+                else {
+                    std::cout << std::endl << "Command not available - Galil not connected" << std::endl;
                 }
                 break;
                 
@@ -89,12 +100,17 @@ public:
             }
         }
 
-        mtsDoubleVec pos;
-        m_ActuatorState.GetPosition(pos);
-        printf("JOINT POS:   [");
-        for (size_t i = 0; i < pos.size(); i++)
-            printf(" %7.2lf ", pos[i]);
-        printf("]\r");
+        if (galilOK) {
+            mtsDoubleVec pos;
+            m_ActuatorState.GetPosition(pos);
+            printf("JOINT POS:   [");
+            for (size_t i = 0; i < pos.size(); i++)
+                printf(" %7.2lf ", pos[i]);
+            printf("]\r");
+        }
+        else {
+            printf("Galil not connected\r");
+        }
 
         osaSleep(0.01);  // to avoid taking too much CPU time
     }

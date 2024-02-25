@@ -47,6 +47,8 @@ public:
     void Cleanup(void) override;
 
     // Galil Controller Functions
+    void GetConnected(bool &val) const { val = (m_Galil != 0); }
+
     void SetTimeout(const double &timeout, bool &success);
 
     inline void WaitMotion(const vctBoolVec &mask) { WaitMotion(mask, m_timeout); }
@@ -124,6 +126,7 @@ public:
     //*** Low-level functions that have been made public for use with the IRE:
     // Send command to Galil controller and return pointer to response buffer.
     inline void SendCommand(const std::string& cmd) { SendCommandString(cmd); }
+    inline void SendCommandRet(const std::string& cmd, std::string &ret) { ret = SendCommandString(cmd); }
     std::string SendCommandString(const std::string& cmd);
     /* Sends a command knowing that the return value will be a int */
     int         SendCommandInt(const std::string& cmd);

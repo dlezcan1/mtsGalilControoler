@@ -224,6 +224,12 @@ void mtsGalilController::SetupInterfaces()
 
     // Add command to control galil controller
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::SendCommand, this, "SendCommand");
+    if (!intfProvided->AddCommandWriteReturn(&mtsGalilController::SendCommandRet, this, "SendCommandRet"))
+    {
+        CMN_LOG_CLASS_INIT_ERROR << "Failed to add mtsGalilController::SendCommandRet to \""
+                                 << intfProvided->GetFullName()
+                                 << "\"" << std::endl;
+    }
     if (!intfProvided->AddCommandWriteReturn(&mtsGalilController::SetTimeout, this, "SetTimeout"))
     {
         CMN_LOG_CLASS_INIT_ERROR << "Failed to add mtsGalilController::SetTimeout to \"" 
@@ -264,6 +270,7 @@ void mtsGalilController::SetupInterfaces()
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::WaitMotion,   this, "WaitMotion");
 
     MTS_ADD_COMMAND_READ_CHECK(intfProvided, &mtsGalilController::GetAnalogInputs, this, "GetAnalogInputs");
+    MTS_ADD_COMMAND_READ_CHECK(intfProvided, &mtsGalilController::GetConnected, this, "GetConnected");
 
     // PK: not correct to delete following
     //delete intfProvided;
@@ -278,9 +285,11 @@ void mtsGalilController::Startup(){
 
 void mtsGalilController::Run()
 {
-    // Get the Galil State
-    GetActuatorState(m_ActuatorState);
-    m_StateTable.Advance();
+    if (m_Galil) {
+        // Get the Galil State
+        GetActuatorState(m_ActuatorState);
+        m_StateTable.Advance();
+    }
 
     // Call any connected components
     RunEvent();
@@ -358,10 +367,19 @@ void mtsGalilController::ConnectToGalilController(const std::string &deviceName)
     {
         std::cout << "Hello Galil" << std::endl;
 
-        GOpen(deviceName.c_str(), &m_Galil);
+        // -d for direct connection (not using gcaps)
+        std::string GalilString = std::string("-d ") + deviceName;
+        GReturn ret = GOpen(GalilString.c_str(), &m_Galil);
+        if (ret != G_NO_ERROR) {
+            CMN_LOG_CLASS_INIT_ERROR << "Galil GOpen: error opening " << deviceName
+                                     << ": " << ret << std::endl;
+            return;
+        }
+        std::cout << "Galil connected!" << std::endl;
 
         // Stop motors and halt Galil Controller program execution
-        this->StopMotionAll();
+        // PK: Following does not seem to work
+        // this->StopMotionAll();
 
         m_ServoLoopTime = this->SendCommandDouble("TM?");
         // Loop time is used to correct for speed scaling due to TM250
