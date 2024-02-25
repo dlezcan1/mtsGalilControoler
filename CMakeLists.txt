@@ -14,9 +14,6 @@ project (sawGalilController VERSION 0.1.0)
 
 set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-set (sawGalilController_INCLUDE_DIR "${sawGalilController_SOURCE_DIR}/include")
-include_directories (${sawGalilController_INCLUDE_DIR})
-
 add_subdirectory (share)
 
 # create a list of required cisst libraries
@@ -57,12 +54,6 @@ endif ()
 
 if (cisst_FOUND_AS_REQUIRED)
 
-    set (sawGalilController_HEADER_FILES
-         "${sawGalilController_INCLUDE_DIR}/sawGalilController/mtsGalilController.h"
-         "${sawGalilController_INCLUDE_DIR}/sawGalilController/sawGalilControllerExport.h")
-    set (sawGalilController_SOURCE_FILES
-         code/mtsGalilController.cpp)
-
     # load cisst configuration
     include (${CISST_USE_FILE})
 
@@ -70,8 +61,15 @@ if (cisst_FOUND_AS_REQUIRED)
         message( FATAL_ERROR "sawGalilController requires cisst to be built with JSON" )
     endif ()
 
+    # Default library path
+    set (LIBRARY_OUTPUT_PATH "${sawGalilController_BINARY_DIR}/lib")
     # catkin/ROS paths
     cisst_set_output_path ()
+
+    set (sawGalilController_INCLUDE_DIR "${sawGalilController_SOURCE_DIR}/include")
+    include_directories (${sawGalilController_INCLUDE_DIR})
+    set (sawGalilController_LIBRARY_DIR "${LIBRARY_OUTPUT_PATH}")
+    set (sawGalilController_LIBRARIES sawGalilController)
 
     if (catkin_FOUND)
         catkin_package(
@@ -79,11 +77,17 @@ if (cisst_FOUND_AS_REQUIRED)
             INCLUDE_DIRS include
             CATKIN_DEPENDS ${catkin_REQUIRED_COMPONENTS}
         )
-
-        # add all config files for this component
-        cisst_add_config_files (sawGalilController)
     endif ()
     
+    set (sawGalilController_HEADER_FILES
+         "${sawGalilController_INCLUDE_DIR}/sawGalilController/mtsGalilController.h"
+         "${sawGalilController_INCLUDE_DIR}/sawGalilController/sawGalilControllerExport.h")
+    set (sawGalilController_SOURCE_FILES
+         code/mtsGalilController.cpp)
+
+   # add all config files for this component
+   cisst_add_config_files (sawGalilController)
+
    add_library (sawGalilController ${IS_SHARED}
                 ${sawGalilController_HEADER_FILES}
                 ${sawGalilController_SOURCE_FILES})
