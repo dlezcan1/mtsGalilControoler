@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package>
-  <name>mts_galil_controller_config</name>
+  <name>sawGalilController_config</name>
   <version>2.2.1</version>
   <description>mtsGalilController config files</description>
 

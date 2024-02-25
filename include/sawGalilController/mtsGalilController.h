@@ -1,18 +1,33 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-    */
+/* ex: set filetype=cpp softtabstop=4 shiftwidth=4 tabstop=4 cindent expandtab: */
+
+/*
+  (C) Copyright 2024 Johns Hopkins University (JHU), All Rights Reserved.
+
+--- begin cisst license - do not edit ---
+
+This software is provided "as is" under an open source license, with
+no warranty.  The complete license can be found in license.txt and
+http://www.cisst.org/cisst/license.txt.
+
+--- end cisst license ---
+*/
+
 #ifndef _mtsGalilContoller_h
 #define _mtsGalilContoller_h
 
 #include <memory>
 
-#include <gclib.h>
-#include <gclibo.h>
-
 #include <cisstParameterTypes/prmActuatorState.h>
 #include <cisstParameterTypes/prmMaskedVector.h>
-#include <cisstMultiTask.h>
+#include <cisstMultiTask/mtsTaskPeriodic.h>
+
+// Always include last
+#include <sawGalilController/sawGalilControllerExport.h>
 
 class CISST_EXPORT mtsGalilController : public mtsTaskPeriodic
 {
-    CMN_DECLARE_SERVICES(CMN_NO_DYNAMIC_CREATION, CMN_LOG_LOD_RUN_ERROR);
+    CMN_DECLARE_SERVICES(CMN_DYNAMIC_CREATION_ONEARG, CMN_LOG_LOD_RUN_ERROR)
 
 public:
     mtsGalilController(const std::string &componentName, double period_secs);
@@ -198,7 +213,6 @@ protected:
     // Disha-encoder
     std::vector<std::string> DI;
 
-
     // Component fields
     mtsStateTable m_StateTable;
     prmActuatorState m_ActuatorState;
@@ -228,19 +242,19 @@ private:
     // galil controller class handle
     GCon         m_Galil;
     mtsStdString m_DeviceName;
-    
+
     // internal variable used to calculate velocity times.
     double            m_ServoLoopTime;
     double            m_TMVelocityMultiplier;
     GDataRecord       m_dataRecord;
-    
+
     // internal is moving state
     vctBoolVec m_SoftRevLimitHit;
     vctBoolVec m_SoftFwdLimitHit;
     size_t     m_NumberEncoderPins;
 
-}; // class: mtsGalilControllerSensorFeedback_Templated
+};
 
-CMN_DECLARE_SERVICES_INSTANTIATION(mtsGalilController);
+CMN_DECLARE_SERVICES_INSTANTIATION(mtsGalilController)
 
 #endif

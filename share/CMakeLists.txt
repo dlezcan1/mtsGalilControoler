@@ -1,13 +1,15 @@
 cmake_minimum_required (VERSION 3.10)
-project (mts_galil_controller_config)
+project (sawGalilController_config)
 
-find_package (catkin QUIET)
-if (catkin_FOUND)
-    catkin_package()
+if (NOT WIN32)
+    find_package (catkin QUIET)
+    if (catkin_FOUND)
+        catkin_package()
+    endif ()
 endif ()
 
 install (
-    DIRECTORY "${mts_galil_controller_SOURCE_DIR}"
+    DIRECTORY "${sawGalilController_SOURCE_DIR}"
     DESTINATION share/mtsGalilController
     COMPONENT mtsGalilController-Share
     PATTERN "CMakeLists.txt" EXCLUDE

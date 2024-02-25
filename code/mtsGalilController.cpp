@@ -1,10 +1,31 @@
-#include "mtsGalilController/mtsGalilController.h"
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-    */
+/* ex: set filetype=cpp softtabstop=4 shiftwidth=4 tabstop=4 cindent expandtab: */
 
-#include <cisstOSAbstraction.h>
+/*
+  (C) Copyright 2024 Johns Hopkins University (JHU), All Rights Reserved.
+
+--- begin cisst license - do not edit ---
+
+This software is provided "as is" under an open source license, with
+no warranty.  The complete license can be found in license.txt and
+http://www.cisst.org/cisst/license.txt.
+
+--- end cisst license ---
+*/
+
+#include <gclib.h>
+#include <gclibo.h>
+
 #include <cisstCommon/cmnDataFormat.h>
+#include <cisstCommon/cmnUnits.h>
+#include <cisstCommon/cmnPath.h>
+#include <cisstOSAbstraction/osaSleep.h>
+#include <cisstOSAbstraction/osaStopwatch.h>
+#include <cisstMultiTask/mtsInterfaceProvided.h>
 
+#include <sawGalilController/mtsGalilController.h>
 
-CMN_IMPLEMENT_SERVICES(mtsGalilController);
+CMN_IMPLEMENT_SERVICES_DERIVED_ONEARG(mtsGalilController, mtsTaskPeriodic, mtsTaskPeriodicConstructorArg)
 
 #define MTS_ADD_COMMAND_CHECK( AddCommandFunc, interface, function, object, name) \
     if (!interface->AddCommandFunc(function, object, name)) \
@@ -13,16 +34,31 @@ CMN_IMPLEMENT_SERVICES(mtsGalilController);
                                  << interface->GetFullName() \
                                  << "\"" << std::endl; \
     }
+
+#if 0
+// Some compilers do not support following
 #define MTS_ADD_COMMAND_READ_CHECK(...) MTS_ADD_COMMAND_CHECK(AddCommandRead, ##__VA_ARGS__)
 #define MTS_ADD_COMMAND_VOID_CHECK(...) MTS_ADD_COMMAND_CHECK(AddCommandVoid, ##__VA_ARGS__)
 #define MTS_ADD_COMMAND_WRITE_CHECK(...) MTS_ADD_COMMAND_CHECK(AddCommandWrite, ##__VA_ARGS__)
 
-mtsGalilController::mtsGalilController(const std::string & componentName, double period_secs) : mtsTaskPeriodic(componentName, period_secs), m_StateTable(10000, "GalilState")
+#else
+
+#define MTS_ADD_COMMAND_READ_CHECK(interface, function, object, name)   \
+        MTS_ADD_COMMAND_CHECK(AddCommandRead, interface, function, object, name)
+#define MTS_ADD_COMMAND_VOID_CHECK(interface, function, object, name) \
+        MTS_ADD_COMMAND_CHECK(AddCommandVoid, interface, function, object, name)
+#define MTS_ADD_COMMAND_WRITE_CHECK(interface, function, object, name) \
+        MTS_ADD_COMMAND_CHECK(AddCommandWrite, interface, function, object, name)
+#endif
+
+mtsGalilController::mtsGalilController(const std::string & componentName, double period_secs) :
+                    mtsTaskPeriodic(componentName, period_secs), m_StateTable(10000, "GalilState")
 {
     SetupInterfaces();
 }
 
-mtsGalilController::mtsGalilController(const mtsTaskPeriodicConstructorArg & arg) : mtsTaskPeriodic(arg), m_StateTable(10000, "GalilState")
+mtsGalilController::mtsGalilController(const mtsTaskPeriodicConstructorArg & arg) :
+                    mtsTaskPeriodic(arg), m_StateTable(10000, "GalilState")
 {
     SetupInterfaces();
 }
@@ -35,7 +71,7 @@ mtsGalilController::~mtsGalilController()
 void mtsGalilController::Configure(const std::string& fileName)
 {
     std::string dmcStartupFile;
-    
+
     try
     {
         std::ifstream jsonStream;
@@ -58,7 +94,6 @@ void mtsGalilController::Configure(const std::string& fileName)
                                    << jsonConfig << std::endl
                                    << "<----" << std::endl;
 
-
         m_DeviceName = jsonConfig["IP_Address"].asString();
 
         // Configure the axes
@@ -75,7 +110,7 @@ void mtsGalilController::Configure(const std::string& fileName)
             m_GalilToAxisChannelMappings.Data()[galilIndex] = axisIndex;
             m_GalilToAxisChannelMappings.Mask()[galilIndex] = true;
         }
-        
+
         // Galil Startup Program
         if (jsonConfig.isMember("DMC_Startup_Program"))
         {
@@ -92,10 +127,9 @@ void mtsGalilController::Configure(const std::string& fileName)
                                  << std::endl;
     }
 
-
     // upload a dmc program file if available
     if (dmcStartupFile.length() > 0)
-    {   
+    {
         if (cmnPath::Exists(dmcStartupFile))
         {
             std::cout << "After testFile is good\n";
@@ -125,16 +159,17 @@ void mtsGalilController::Configure(const std::string& fileName)
 
     // Disha- encoder
     unsigned int Encoder_pins[] = {9, 12, 15, 11, 14, 10, 13, 8, 1, 2};
-    m_NumberEncoderPins = sizeof(Encoder_pins) / sizeof(Encoder_pins[0]);
-    m_DigitalInput.SetSize(m_NumberEncoderPins);
+    const size_t NumberEncoderPins = sizeof(Encoder_pins) / sizeof(Encoder_pins[0]);
+    m_NumberEncoderPins = NumberEncoderPins;
+    m_DigitalInput.SetSize(NumberEncoderPins);
     m_DigitalInput.Zeros();
 
     m_Galil = nullptr;
     // max number of actuator is 8 here
     char analogStr[7];
     // Disha-encoder
-    char digitalStr[m_NumberEncoderPins];
-    memset(digitalStr, 0, sizeof(char) * m_NumberEncoderPins);
+    char digitalStr[NumberEncoderPins];
+    memset(digitalStr, 0, sizeof(char) * NumberEncoderPins);
     memset(analogStr, 0, sizeof(char) * 7);
 
     m_SoftRevLimitHit.SetSize(GetNumberActuators());
@@ -170,7 +205,6 @@ void mtsGalilController::Configure(const std::string& fileName)
         sprintf(digitalStr, "@IN[%02d]", Encoder_pins[i]);
         DI.push_back(std::string(digitalStr));
     }
-    
 }
 
 void mtsGalilController::SetupInterfaces()
@@ -213,19 +247,19 @@ void mtsGalilController::SetupInterfaces()
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::SetAcceleration,     this, "SetAccleration");
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::SetDeceleration,     this, "SetDecleration");
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::SetSpeed,            this, "SetSpeed");
-    
+
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::SetAbsolutePosition, this, "SetAbsolutePosition");
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::SetPositionMove,     this, "SetPositionMove");
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::SetVelocityMove,     this, "SetVelocityMove");
-    
+
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::EnableMotorPower,     this, "EnableMotorPower");
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::DisableMotorPower,    this, "DisableMotorPower");
     MTS_ADD_COMMAND_VOID_CHECK(intfProvided,  &mtsGalilController::EnableAllMotorPower,  this, "EnableAllMotorPower");
     MTS_ADD_COMMAND_VOID_CHECK(intfProvided,  &mtsGalilController::DisableAllMotorPower, this, "DisableAllMotorPower");
-    
+
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::StopMotion,    this, "StopMotion");
     MTS_ADD_COMMAND_VOID_CHECK(intfProvided,  &mtsGalilController::StopMotionAll, this, "StopMotionAll");
-    
+
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::StopMovement, this, "StopMovement");
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::WaitMotion,   this, "WaitMotion");
 
@@ -248,7 +282,6 @@ void mtsGalilController::Run(){
     m_StateTable.Start();
     GetActuatorState(m_ActuatorState);
     m_StateTable.Advance();
-
 }
 
 void mtsGalilController::Cleanup(){
@@ -259,13 +292,13 @@ void mtsGalilController::Cleanup(){
     }
     catch (std::runtime_error e)
     {
-        throw e;    
+        throw e;
     }
 }
 
-void mtsGalilController::SetTimeout(const mtsDouble& timeout, mtsBool& success){ 
+void mtsGalilController::SetTimeout(const mtsDouble& timeout, mtsBool& success){
     success.Data = false;
-    if (timeout > 0) 
+    if (timeout > 0)
     {
         success.Data = true;
         m_timeout    = timeout;
@@ -399,7 +432,7 @@ void mtsGalilController::EnableMotorPower(const mtsBoolVec &mask)
 void mtsGalilController::DisableMotorPower(const mtsBoolVec &mask)
 {
     CMN_LOG_CLASS_RUN_VERBOSE << "DisableMotorPower \"" << mask << "\"" << std::endl;
-        try
+    try
     {
         StopMotion(mask);
         char buffer[G_SMALL_BUFFER];
@@ -433,7 +466,7 @@ void mtsGalilController::StopMotionAll()
 void mtsGalilController::StopMotion(const mtsBoolVec &mask)
 {
     CMN_LOG_CLASS_RUN_VERBOSE << "Stop \"" << mask << "\"" << std::endl;
-    
+
     try
     {
         if (mask.Equal(false))
@@ -490,11 +523,6 @@ void mtsGalilController::Home(const mtsBoolVec &mask)
         SendCommandString(buffer);
     }
 
-    catch (std::runtime_error e)
-    {
-        CMN_LOG_CLASS_RUN_ERROR << "Homing failed: Error  \"" << e.what() << "\"" << std::endl;
-        cmnThrow(std::runtime_error("Homing error "));
-    }
     catch (std::runtime_error e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Homing failed: Error  \"" << e.what() << "\"" << std::endl;
@@ -1295,4 +1323,5 @@ vctBoolVec mtsGalilController::RemapAxisMask(const vctBoolVec& axisMask)
 
         galilMask[idxGalil] = axisMask[idxGalil];
     }
+    return galilMask;   // PK TODO: Added to compile
 }
