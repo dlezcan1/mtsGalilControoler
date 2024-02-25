@@ -602,7 +602,7 @@ void mtsGalilController::GetActuatorState(prmActuatorState &state)
         m_DecPosition = 0;
         for (unsigned int i = 0; i < m_NumberEncoderPins; i++)
         {
-            m_DigitalInput[i] = this->SendCommandInt("MG_" + DI[i]);
+            m_DigitalInput[i] = this->SendCommandInt("MG " + DI[i]);
             m_DigitalInput[i] = !m_DigitalInput[i];
 
             m_DecPosition += m_DigitalInput[i] * pow(2, (9 - i));
@@ -620,7 +620,7 @@ void mtsGalilController::GetActuatorState(prmActuatorState &state)
         for (unsigned int i = 0; i < GetNumberActuators(); i++)
         {
             // the encoders are in long
-            state.Position()[i] = (long)this->SendCommandInt("MG_" + TP[i]);
+            state.Position()[i] = (long)this->SendCommandInt("MG " + TP[i]);
 
             // In the new version: This only applies to setting values, e.g., sp.
             // velocity still returns the actual Velocity * (TM/1000) so multiply it by 1000/tm
@@ -629,42 +629,42 @@ void mtsGalilController::GetActuatorState(prmActuatorState &state)
             // this might be different for TMi250, not sure what the value will be
             // it might be 1/4 of actual velocity due to faster sampling
 
-            state.Velocity()[i] = this->SendCommandDouble("MG_" + TV[i]) * m_TMVelocityMultiplier;
+            state.Velocity()[i] = this->SendCommandDouble("MG " + TV[i]) * m_TMVelocityMultiplier;
 
             // analog inputs are not part of the actuator state??
-            m_AnalogInput[i] = this->SendCommandDouble("MG_" + AN[i]);
+            m_AnalogInput[i] = this->SendCommandDouble("MG " + AN[i]);
 
             // be careful, this is a motion profile variable not actual motion (there is a lag where the servo loop
             // catches up to the profile position)
             //  state.Velocity()[i]=(galil->sourceValue(m_data, TV[i]));
-            if (this->SendCommandDouble("MG _" + BG[i]) != 0.0)
+            if (this->SendCommandDouble("MG " + BG[i]) != 0.0)
             {
                 state.InMotion()[i] = true;
             }
 
             // motor off
-            if (this->SendCommandDouble("MG _" + MO[i]) != 0.0)
+            if (this->SendCommandDouble("MG " + MO[i]) != 0.0)
             {
                 state.MotorOff()[i] = true;
             }
 
-            if (this->SendCommandDouble("MG _" + ZA[i]) != 0.0)
+            if (this->SendCommandDouble("MG " + ZA[i]) != 0.0)
             {
                 state.IsHomed()[i] = true;
             }
 
             // TODO: double check the active ihigh/low configuration
             // here we assume that homeCFG=-1
-            if (this->SendCommandDouble("MG _" + HM[i]) != 0.0)
+            if (this->SendCommandDouble("MG " + HM[i]) != 0.0)
                 state.HomeSwitchOn()[i] = true;
 
             // Decelerating or stopped by FWD limit switch OR soft limit FL
-            if (this->SendCommandDouble("MG _" + SC[i]) == 2)
+            if (this->SendCommandDouble("MG " + SC[i]) == 2)
             {
                 state.SoftFwdLimitHit()[i] = true;
                 m_SoftFwdLimitHit = true;
             }
-            if (this->SendCommandDouble("MG _" + SC[i]) == 3)
+            if (this->SendCommandDouble("MG " + SC[i]) == 3)
             {
                 state.SoftRevLimitHit()[i] = true;
                 m_SoftRevLimitHit = true;
@@ -689,18 +689,18 @@ void mtsGalilController::GetActuatorState(prmActuatorState &state)
 
             // TODO: check, this might be differnt for CN-1, or CN1
 
-            if (this->SendCommandDouble("MG _" + LF[i]) == 0)
+            if (this->SendCommandDouble("MG " + LF[i]) == 0)
             {
                 state.HardFwdLimitHit()[i] = true;
             }
 
-            if (this->SendCommandDouble("MG _" + LR[i]) == 0)
+            if (this->SendCommandDouble("MG " + LR[i]) == 0)
             {
                 state.HardFwdLimitHit()[i] = true;
             }
 
             // user variable used to store state of home
-            if (this->SendCommandDouble("MG _" + ZA[i]) == 1)
+            if (this->SendCommandDouble("MG " + ZA[i]) == 1)
             {
                 state.IsHomed()[i] = true;
             }
@@ -726,7 +726,7 @@ void mtsGalilController::GetActuatorState(prmActuatorState &state)
         // the update rate (TM command) will actually set an update rate of 976 microseconds. Thus the
         // value returned by the TIME operand will be off by 2.4% of the actual time.
 
-        state.Timestamp() = this->SendCommandDouble("TIME");
+        state.Timestamp() = this->SendCommandDouble("MG TIME");
 
         // TC is the error code;
         // 1 Unrecognized command 56 Array index invalid or out of range
