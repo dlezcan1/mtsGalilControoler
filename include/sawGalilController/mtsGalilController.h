@@ -19,6 +19,9 @@ http://www.cisst.org/cisst/license.txt.
 #include <string>
 #include <vector>
 
+#include <gclib.h>
+#include <gclibo.h>
+
 #include <cisstVector/vctDynamicVectorTypes.h>
 #include <cisstParameterTypes/prmActuatorState.h>
 #include <cisstParameterTypes/prmMaskedVector.h>

@@ -13,9 +13,6 @@ http://www.cisst.org/cisst/license.txt.
 --- end cisst license ---
 */
 
-#include <gclib.h>
-#include <gclibo.h>
-
 #include <cisstCommon/cmnDataFormat.h>
 #include <cisstCommon/cmnUnits.h>
 #include <cisstCommon/cmnPath.h>
@@ -95,9 +92,11 @@ void mtsGalilController::Configure(const std::string& fileName)
                                    << "<----" << std::endl;
 
         m_DeviceName = jsonConfig["IP_Address"].asString();
-
         // Configure the axes
         Json::Value axesConfig = jsonConfig["Axes"];
+        m_EncoderCountsPerUnit.SetSize(axesConfig.size());
+        m_AxisToGalilChannelMappings.SetSize(axesConfig.size());
+        m_GalilToAxisChannelMappings.SetSize(axesConfig.size());
         for (auto it = axesConfig.begin(); it != axesConfig.end(); it++)
         {
             unsigned int axisIndex = it.index();
@@ -154,8 +153,9 @@ void mtsGalilController::Configure(const std::string& fileName)
     m_AnalogInput.SetSize(GetNumberActuators());
     m_AnalogInput.Zeros();
 
-    m_EncoderCountsPerUnit.SetSize(GetNumberActuators());
-    m_EncoderCountsPerUnit.SetAll(1.0); // default to use encoder counts
+    // PK: size set above
+    // m_EncoderCountsPerUnit.SetSize(GetNumberActuators());
+    // m_EncoderCountsPerUnit.SetAll(1.0); // default to use encoder counts
 
     // Disha- encoder
     unsigned int Encoder_pins[] = {9, 12, 15, 11, 14, 10, 13, 8, 1, 2};
@@ -213,7 +213,7 @@ void mtsGalilController::SetupInterfaces()
     m_StateTable.AddData(m_ActuatorState, "ActuatorState");
 
     // Add the interface
-    mtsInterfaceProvided* intfProvided = this->AddInterfaceProvided("GalilController");
+    mtsInterfaceProvided* intfProvided = this->AddInterfaceProvided("control");
     if (!intfProvided)
     {
         CMN_LOG_CLASS_INIT_ERROR << "Error adding \"GalilController\" provided interface \"" 
@@ -1024,7 +1024,7 @@ int mtsGalilController::SendCommandInt(const std::string &cmd)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Error for command \\" << cmd << "\\" << std::endl;
         CMN_LOG_CLASS_RUN_ERROR << "Galil error code: " << rc << std::endl;
-        cmnThrow(std::runtime_error(std::string("SendCommand:  Error sending command--") + std::to_string(rc)), CMN_LOG_LOD_RUN_ERROR);
+        cmnThrow(std::runtime_error(std::string("SendCommandInt:  Error sending command--") + std::to_string(rc)), CMN_LOG_LOD_RUN_ERROR);
 
         //  int t = atoi( (e.substr(0,1)).c_str() ); // get int for type, first digit of code
         //  int f = atoi( (e.substr(1,2)).c_str() ); // int for function, middle two digits of code
@@ -1049,7 +1049,7 @@ double mtsGalilController::SendCommandDouble(const std::string &cmd)
     double response;
     if (!m_Galil)
     {
-        cmnThrow(std::runtime_error("SendCommandInt: ( No Controller Handle = Not Connected )"));
+        cmnThrow(std::runtime_error("SendCommandDouble: ( No Controller Handle = Not Connected )"));
     }
     CMN_LOG_CLASS_RUN_DEBUG << "Sending to Galil [" << cmd << "]" << std::endl;
 
@@ -1062,7 +1062,7 @@ double mtsGalilController::SendCommandDouble(const std::string &cmd)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Error for command \\" << cmd << "\\" << std::endl;
         CMN_LOG_CLASS_RUN_ERROR << "Galil error code: " << rc << std::endl;
-        cmnThrow(std::runtime_error(std::string("SendCommand:  Error sending command--") + std::to_string(rc)), CMN_LOG_LOD_RUN_ERROR);
+        cmnThrow(std::runtime_error(std::string("SendCommandDouble:  Error sending command--") + std::to_string(rc)), CMN_LOG_LOD_RUN_ERROR);
 
         //  int t = atoi( (e.substr(0,1)).c_str() ); // get int for type, first digit of code
         //  int f = atoi( (e.substr(1,2)).c_str() ); // int for function, middle two digits of code
