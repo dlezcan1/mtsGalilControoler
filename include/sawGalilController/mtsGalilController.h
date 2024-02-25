@@ -19,6 +19,7 @@ http://www.cisst.org/cisst/license.txt.
 #include <string>
 #include <vector>
 
+#include <cisstVector/vctDynamicVectorTypes.h>
 #include <cisstParameterTypes/prmActuatorState.h>
 #include <cisstParameterTypes/prmMaskedVector.h>
 #include <cisstMultiTask/mtsTaskPeriodic.h>
@@ -43,10 +44,10 @@ public:
     void Cleanup(void) override;
 
     // Galil Controller Functions
-    void SetTimeout(const mtsDouble &timeout, mtsBool &success);
+    void SetTimeout(const double &timeout, bool &success);
 
-    inline void WaitMotion(const mtsBoolVec &mask) { WaitMotion(mask, m_timeout); }
-    inline void StopMovement(const mtsBoolVec &mask) { StopMovement(mask, m_timeout); }
+    inline void WaitMotion(const vctBoolVec &mask) { WaitMotion(mask, m_timeout); }
+    inline void StopMovement(const vctBoolVec &mask) { StopMovement(mask, m_timeout); }
 
     // Initialize (e.g., establish communications with the controller)
     // and configure the robot.  Note that a configuration file name could
@@ -58,18 +59,18 @@ public:
     void DisableAllMotorPower();
 
     // specify the axes.
-    void EnableMotorPower(const mtsBoolVec &mask);
+    void EnableMotorPower(const vctBoolVec &mask);
     // turn power off to the motors, run stopmotion command first just in case
     // otherwise it is not possible to turn off motors when running?
-    void DisableMotorPower(const mtsBoolVec &mask);
+    void DisableMotorPower(const vctBoolVec &mask);
 
     // Stop robot motion (do not disable motor power)
     void StopMotionAll();
-    void StopMotion(const mtsBoolVec &mask);
+    void StopMotion(const vctBoolVec &mask);
 
     // the mask is used as command mask, where bool=true homes that axes in the vector
-    void Home(const mtsBoolVec &mask);
-    void UnHome(const mtsBoolVec &mask);
+    void Home(const vctBoolVec &mask);
+    void UnHome(const vctBoolVec &mask);
 
     // Abort robot command
     void AbortProgram();
@@ -87,9 +88,9 @@ public:
     //     in counts/sec**2
     void GetActuatorState(prmActuatorState &state);
 
-    void GetAnalogInputs(mtsDoubleVec &ain) const;
+    void GetAnalogInputs(vctDoubleVec &ain) const;
     // Disha-encoder
-    void GetToolZEncoder(mtsInt &toolZencoder) const;
+    void GetToolZEncoder(int &toolZencoder) const;
 
     // The expected  values are in counts.
     // Set the desired motion goals.
@@ -113,13 +114,13 @@ public:
 
     //*** Other functions:
     // Wait for all motion to be complete, with a timeout in seconds.
-    void StopMovement(const mtsBoolVec &mask, double timeout = 60);
+    void StopMovement(const vctBoolVec &mask, double timeout = 60);
     // Wait for all motion to be complete, with a timeout in seconds.
-    void WaitMotion(const mtsBoolVec &mask, double timeout = 60);
+    void WaitMotion(const vctBoolVec &mask, double timeout = 60);
 
     //*** Low-level functions that have been made public for use with the IRE:
     // Send command to Galil controller and return pointer to response buffer.
-    inline void SendCommand(const mtsStdString& cmd) { SendCommandString(cmd.Data); }
+    inline void SendCommand(const std::string& cmd) { SendCommandString(cmd); }
     std::string SendCommandString(const std::string& cmd);
     /* Sends a command knowing that the return value will be a int */
     int         SendCommandInt(const std::string& cmd);
@@ -136,8 +137,8 @@ public:
     };
 
     // change the pid parameters by loading different
-    void GetMotionMode(mtsUInt &mode) const { mode = m_MotionMode; }
-    void SetMotionMode(const mtsUInt &mode) { m_MotionMode = mode; }
+    void GetMotionMode(unsigned int &mode) const { mode = m_MotionMode; }
+    void SetMotionMode(const unsigned int &mode) { m_MotionMode = mode; }
 
     // Method to record values via QR/DR packets
     enum DataRecordMethod
@@ -147,8 +148,8 @@ public:
     };
     GDataRecord RecordData(const DataRecordMethod &method = DataRecordMethod::QR);
 
-    mtsDoubleVec GetEncoderCountConversionFactors() const { return m_EncoderCountsPerUnit; }
-    void SetEncoderCountConversionFactors(const mtsDoubleVec &conversionFactors)
+    vctDoubleVec GetEncoderCountConversionFactors() const { return m_EncoderCountsPerUnit; }
+    void SetEncoderCountConversionFactors(const vctDoubleVec &conversionFactors)
     {
         assert(conversionFactors.size() == m_EncoderCountsPerUnit.size());
         m_EncoderCountsPerUnit = conversionFactors;
@@ -242,7 +243,7 @@ private:
 
     // galil controller class handle
     GCon         m_Galil;
-    mtsStdString m_DeviceName;
+    std::string  m_DeviceName;
 
     // internal variable used to calculate velocity times.
     double            m_ServoLoopTime;

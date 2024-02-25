@@ -265,12 +265,13 @@ void mtsGalilController::SetupInterfaces()
 
     MTS_ADD_COMMAND_READ_CHECK(intfProvided, &mtsGalilController::GetAnalogInputs, this, "GetAnalogInputs");
 
-    delete intfProvided;
+    // PK: not correct to delete following
+    //delete intfProvided;
 }
 
 
 void mtsGalilController::Startup(){
-    ConnectToGalilController(m_DeviceName.Data);
+    ConnectToGalilController(m_DeviceName);
 }
 
 
@@ -296,12 +297,12 @@ void mtsGalilController::Cleanup(){
     }
 }
 
-void mtsGalilController::SetTimeout(const mtsDouble& timeout, mtsBool& success){
-    success.Data = false;
+void mtsGalilController::SetTimeout(const double& timeout, bool& success){
+    success = false;
     if (timeout > 0)
     {
-        success.Data = true;
-        m_timeout    = timeout;
+        success = true;
+        m_timeout = timeout;
     }
 }
 
@@ -410,7 +411,7 @@ void mtsGalilController::DisableAllMotorPower()
     }
 }
 
-void mtsGalilController::EnableMotorPower(const mtsBoolVec &mask)
+void mtsGalilController::EnableMotorPower(const vctBoolVec &mask)
 {
     CMN_LOG_CLASS_RUN_VERBOSE << "EnableMotorPower \"" << mask << "\"" << std::endl;
     try
@@ -427,7 +428,7 @@ void mtsGalilController::EnableMotorPower(const mtsBoolVec &mask)
 }
 
 // MO not valid while running, need to issue ST first!!!! annoying.
-void mtsGalilController::DisableMotorPower(const mtsBoolVec &mask)
+void mtsGalilController::DisableMotorPower(const vctBoolVec &mask)
 {
     CMN_LOG_CLASS_RUN_VERBOSE << "DisableMotorPower \"" << mask << "\"" << std::endl;
     try
@@ -450,7 +451,7 @@ void mtsGalilController::StopMotionAll()
     try
     {
         CMN_LOG_CLASS_RUN_VERBOSE << "Stop ALL" << std::endl;
-        mtsBoolVec all(GetNumberActuators());
+        vctBoolVec all(GetNumberActuators());
         all.SetAll(true);
         StopMotion(all);
     }
@@ -461,7 +462,7 @@ void mtsGalilController::StopMotionAll()
     }
 }
 
-void mtsGalilController::StopMotion(const mtsBoolVec &mask)
+void mtsGalilController::StopMotion(const vctBoolVec &mask)
 {
     CMN_LOG_CLASS_RUN_VERBOSE << "Stop \"" << mask << "\"" << std::endl;
 
@@ -492,7 +493,7 @@ void mtsGalilController::StopMotion(const mtsBoolVec &mask)
 // THIS IS A BLOCKING COMMAND!!!!!!!!
 // Start homing with the stage to the negative side of the home switch
 
-void mtsGalilController::Home(const mtsBoolVec &mask)
+void mtsGalilController::Home(const vctBoolVec &mask)
 {
     CMN_LOG_CLASS_RUN_VERBOSE << "Homing \"" << mask << "\"" << std::endl;
 
@@ -513,7 +514,7 @@ void mtsGalilController::Home(const mtsBoolVec &mask)
         WaitMotion(mask, 60);
 
         // if home is found, lets save the status in a variable.
-        mtsDoubleVec homeValue;
+        vctDoubleVec homeValue;
         homeValue.SetSize(mask.size());
         homeValue.SetAll(1);
 
@@ -535,11 +536,11 @@ void mtsGalilController::Home(const mtsBoolVec &mask)
 
 // UnHome:  Unhome the robot.  Besides clearing the IsHomed flag, this function turns off the forward and reverse
 //          software travel limits i.e sets them to +/- 100mm
-void mtsGalilController::UnHome(const mtsBoolVec &mask)
+void mtsGalilController::UnHome(const vctBoolVec &mask)
 {
     CMN_LOG_CLASS_RUN_VERBOSE << "UnHoming \"" << mask << "\"" << std::endl;
 
-    mtsDoubleVec homeValue;
+    vctDoubleVec homeValue;
     homeValue.SetSize(mask.size());
     homeValue.SetAll(0);
 
@@ -746,7 +747,7 @@ void mtsGalilController::GetActuatorState(prmActuatorState &state)
     state.Velocity() = ConvertEncoderCountsToAxisUnit(state.Velocity());
 }
 
-void mtsGalilController::GetAnalogInputs(mtsDoubleVec &ain) const
+void mtsGalilController::GetAnalogInputs(vctDoubleVec &ain) const
 {
 
     if (ain.size() == m_AnalogInput.size())
@@ -761,7 +762,7 @@ void mtsGalilController::GetAnalogInputs(mtsDoubleVec &ain) const
 }
 
 // Disha-encoder
-void mtsGalilController::GetToolZEncoder(mtsInt &toolZencoder) const
+void mtsGalilController::GetToolZEncoder(int &toolZencoder) const
 {
 
     toolZencoder = m_DecPosition;
@@ -891,7 +892,7 @@ void mtsGalilController::SetAbsolutePosition(const prmMaskedDoubleVec &position)
     SendCommandString(buffer);
 }
 
-void mtsGalilController::StopMovement(const mtsBoolVec &mask, double timeout)
+void mtsGalilController::StopMovement(const vctBoolVec &mask, double timeout)
 {
     osaStopwatch timer;
     timer.Reset();
@@ -922,7 +923,7 @@ void mtsGalilController::StopMovement(const mtsBoolVec &mask, double timeout)
 // WaitMotion:  Wait for the robot to stop the current motion
 // waits for the specified axes
 // specified timeout in seconds
-void mtsGalilController::WaitMotion(const mtsBoolVec &mask, double timeout)
+void mtsGalilController::WaitMotion(const vctBoolVec &mask, double timeout)
 {
     osaStopwatch timer;
     timer.Reset();
