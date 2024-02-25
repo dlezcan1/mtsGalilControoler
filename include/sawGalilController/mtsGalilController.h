@@ -227,10 +227,10 @@ private:
 
     void ConnectToGalilController(const std::string& deviceName);
 
-    //////-----	Motion commands   -----//////
+    //////----- Motion commands   -----//////
     //  (all positions are in COUNTS and are relative to the ACTUATOR HOME position).
     // All the mtsVectors are going to be the size of the MAX_
-    vctBoolVec	 m_IsHomed;  // TRUE if actuator IsHomed
+    vctBoolVec   m_IsHomed;  // TRUE if actuator IsHomed
     vctDoubleVec m_AnalogInput;
 
     // Disha-encoder

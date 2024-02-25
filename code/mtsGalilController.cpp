@@ -272,17 +272,20 @@ void mtsGalilController::SetupInterfaces()
 
 void mtsGalilController::Startup(){
     ConnectToGalilController(m_DeviceName);
+    m_StateTable.Start();
 }
 
 
-void mtsGalilController::Run(){
-    this->ProcessQueuedEvents();
-    // this->ProcessQueuedCommands();
-
+void mtsGalilController::Run()
+{
     // Get the Galil State
-    m_StateTable.Start();
     GetActuatorState(m_ActuatorState);
     m_StateTable.Advance();
+
+    // Call any connected components
+    RunEvent();
+
+    ProcessQueuedCommands();
 }
 
 void mtsGalilController::Cleanup(){
@@ -337,6 +340,7 @@ void mtsGalilController::Close()
         DisableAllMotorPower();
         GClose(m_Galil);
         // PK: I do not think it is necessary or correct to delete m_Galil
+        //     you could set it to nullptr if you want
         // delete m_Galil;
     }
 }
@@ -375,14 +379,13 @@ void mtsGalilController::ConnectToGalilController(const std::string &deviceName)
     {
         CMN_LOG_CLASS_RUN_ERROR << e.what() << std::endl;
     }
-    return;
 }
 
 // EnableMotorPower:  turns on the motor servos
 void mtsGalilController::EnableAllMotorPower()
 {
     CMN_LOG_CLASS_RUN_VERBOSE << "EnableMotorPower " << std::endl;
-    //	VerifyStatus("EnableMotorPower", ESTOP_MASK);
+    // VerifyStatus("EnableMotorPower", ESTOP_MASK);
     try
     {
         this->SendCommandString("SH");
@@ -489,7 +492,7 @@ void mtsGalilController::StopMotion(const vctBoolVec &mask)
 
 // this is a bit tricky. the settings in the config file determine in which
 // direction the homing procedure will start.
-// last known velocity will be used for homeing.
+// last known velocity will be used for homing.
 // THIS IS A BLOCKING COMMAND!!!!!!!!
 // Start homing with the stage to the negative side of the home switch
 
@@ -535,7 +538,7 @@ void mtsGalilController::Home(const vctBoolVec &mask)
 }
 
 // UnHome:  Unhome the robot.  Besides clearing the IsHomed flag, this function turns off the forward and reverse
-//          software travel limits i.e sets them to +/- 100mm
+//          software travel limits, i.e., sets them to +/- 100mm
 void mtsGalilController::UnHome(const vctBoolVec &mask)
 {
     CMN_LOG_CLASS_RUN_VERBOSE << "UnHoming \"" << mask << "\"" << std::endl;
@@ -559,7 +562,7 @@ void mtsGalilController::UnHome(const vctBoolVec &mask)
 
 void mtsGalilController::GetActuatorState(prmActuatorState &state)
 {
-    // InMotion returns the motion profile finished, typically there is some histersis in the control
+    // InMotion returns the motion profile finished, typically there is some hysteresis in the control
     // algorithm, so the profile finishes assuming perfect tracking, and the servo loop tries to
     // catch up.
     state.SetSize(GetNumberActuators());
@@ -601,7 +604,7 @@ void mtsGalilController::GetActuatorState(prmActuatorState &state)
             // the encoders are in long
             state.Position()[i] = (long)this->SendCommandInt("MG_" + TP[i]);
 
-            // In the new version: This only applies to setting values ,eg sp.
+            // In the new version: This only applies to setting values, e.g., sp.
             // velocity still returns the actual Velocity * (TM/1000) so multiply it by 1000/tm
             // The TV command is computed using a special averaging filter (over approximately 0.25 sec for
             // TM1000). Therefore, TV will return average velocity, not instantaneous velocity.
@@ -764,15 +767,14 @@ void mtsGalilController::GetAnalogInputs(vctDoubleVec &ain) const
 // Disha-encoder
 void mtsGalilController::GetToolZEncoder(int &toolZencoder) const
 {
-
     toolZencoder = m_DecPosition;
 }
 
-// The expected  values are in counts.
+// The expected values are in counts.
 // Set the desired motion goals.
 // this sets the desired actuator goal, also sets the velocity
 // in PT - POSITION TRACKING MODE (PT1,1..) SP, AC, DC commands are allowed while the robot is moving.
-// If in a differnet mode, ST (stop) command has to be called first.
+// If in a different mode, ST (stop) command has to be called first.
 void mtsGalilController::SetPositionMove(const prmMaskedDoubleVec &goalPosition)
 {
     CMN_LOG_CLASS_RUN_VERBOSE << "SetPositionMove \"" << goalPosition << "\"" << std::endl;
@@ -786,7 +788,7 @@ void mtsGalilController::SetPositionMove(const prmMaskedDoubleVec &goalPosition)
     // if in jog mode then PT will shut it off and turn position tracking without BGA
     prmMaskedDoubleVec goalPositionEnc = ConvertAxisUnitToEncoderCounts(goalPosition);
     char buffer[G_SMALL_BUFFER];
-    // createa  command that will print PT1,,1,,,, etc.
+    // create a command that will print PT1,,1,,,, etc.
     prmMaskedDoubleVec cmdPT(goalPosition.Mask().size());
     cmdPT.Data().SetAll(1);
     CreateCommandLong(buffer, "PT", goalPosition.Mask(), cmdPT.Data());
@@ -830,8 +832,7 @@ void mtsGalilController::SetVelocityMove(const prmMaskedDoubleVec &goalVelocity)
 
     // Note when a soft limit switch is hit, it takes two ms to notice, so if we constantly call BG then the profile is started from scratch
     //  and the soft limit is only check on the following loop cycle in the galil controller.
-    // so try to avoid callign BG after JG
-
+    // so try to avoid calling BG after JG
     // just in case they are not moving.
     vctBoolVec startJogMask(goalVelocityEnc.Mask());
 
@@ -850,8 +851,8 @@ void mtsGalilController::SetVelocityMove(const prmMaskedDoubleVec &goalVelocity)
     SendCommandString(buffer);
 };
 
-// Note : while the robot is moving we can not change the acceleration or decelaration.
-// this sets the velocity rather then position
+// Note: while the robot is moving we cannot change the acceleration or deceleration.
+// this sets the velocity rather than position
 void mtsGalilController::SetSpeed(const prmMaskedDoubleVec &speed)
 {
     CMN_LOG_CLASS_RUN_VERBOSE << "Setting velocity \"" << speed << "\"" << std::endl;
@@ -969,7 +970,6 @@ std::string mtsGalilController::SendCommandString(const std::string &cmd)
     GCStringOut response;
     if (!m_Galil)
     {
-
         cmnThrow(std::runtime_error("SendCommandString: ( No Controller Handle = Not Connected )"));
         return " ";
     }
@@ -1011,7 +1011,6 @@ int mtsGalilController::SendCommandInt(const std::string &cmd)
     int response;
     if (!m_Galil)
     {
-
         cmnThrow(std::runtime_error("SendCommandInt: ( No Controller Handle = Not Connected )"));
     }
     CMN_LOG_CLASS_RUN_DEBUG << "Sending to Galil [" << cmd << "]" << std::endl;
@@ -1050,7 +1049,6 @@ double mtsGalilController::SendCommandDouble(const std::string &cmd)
     double response;
     if (!m_Galil)
     {
-
         cmnThrow(std::runtime_error("SendCommandInt: ( No Controller Handle = Not Connected )"));
     }
     CMN_LOG_CLASS_RUN_DEBUG << "Sending to Galil [" << cmd << "]" << std::endl;
@@ -1090,7 +1088,6 @@ void mtsGalilController::CreateCommand(char *buffer,
                                              const vctBoolVec &mask,
                                              const vctDoubleVec &cmdParam)
 {
-
     long bufpos;
     bufpos = sprintf(buffer, "%s", galilCmd);
 
@@ -1118,7 +1115,6 @@ void mtsGalilController::CreateCommandLong(char *buffer,
                                                  const vctBoolVec &mask,
                                                  const vctDoubleVec &cmdParam)
 {
-
     long bufpos;
     bufpos = sprintf(buffer, "%s", galilCmd);
     unsigned int ii;
