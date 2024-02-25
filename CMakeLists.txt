@@ -36,23 +36,23 @@ find_package (gclib REQUIRED)
 include_directories (${gclib_INCLUDE_DIR})
 link_directories (${gclib_LIBRARY_DIR})
 
-if (NOT WIN32)
-    set (catkin_REQUIRED_COMPONENTS
-         roscpp
-         rospy
-         std_msgs
-         geometry_msgs
-         cisst_msgs
-         cisst_ros_bridge)
+set (catkin_REQUIRED_COMPONENTS
+     roscpp
+     rospy
+     std_msgs
+     geometry_msgs
+     cisst_msgs
+     cisst_ros_bridge)
 
-    find_package(catkin REQUIRED COMPONENTS ${catkin_REQUIRED_COMPONENTS})
+find_package(catkin COMPONENTS ${catkin_REQUIRED_COMPONENTS})
+
+if (catkin_FOUND)
     include_directories(${catkin_INCLUDE_DIRS})
 
     catkin_package(
         INCLUDE_DIRS include
         LIBRARIES sawGalilController
         CATKIN_DEPENDS ${catkin_REQUIRED_COMPONENTS})
-
 endif ()
 
 if (cisst_FOUND_AS_REQUIRED)
@@ -73,7 +73,7 @@ if (cisst_FOUND_AS_REQUIRED)
     # catkin/ROS paths
     cisst_set_output_path ()
 
-    if (NOT WIN32)
+    if (catkin_FOUND)
         catkin_package(
             LIBRARIES sawGalilController
             INCLUDE_DIRS include
@@ -116,7 +116,7 @@ if (cisst_FOUND_AS_REQUIRED)
             ARCHIVE DESTINATION lib
     )
 
-    if (NOT WIN32)
+    if (catkin_FOUND)
         install(TARGETS sawGalilController
             ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
             LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}

@@ -16,7 +16,8 @@ http://www.cisst.org/cisst/license.txt.
 #ifndef _mtsGalilContoller_h
 #define _mtsGalilContoller_h
 
-#include <memory>
+#include <string>
+#include <vector>
 
 #include <cisstParameterTypes/prmActuatorState.h>
 #include <cisstParameterTypes/prmMaskedVector.h>
@@ -220,7 +221,7 @@ protected:
     float m_timeout = 60.0 * cmn_s;
 
 private:
-    static inline void CheckErrorGCommand(GReturn rc) throw(GReturn) { if (rc != G_NO_ERROR) throw rc; } 
+    static inline void CheckErrorGCommand(GReturn rc) { if (rc != G_NO_ERROR) throw rc; }
     static GCStringOut BufferToGCStringOut(char* buffer, unsigned int buffer_size);
 
     void ConnectToGalilController(const std::string& deviceName);

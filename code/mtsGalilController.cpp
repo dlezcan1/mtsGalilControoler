@@ -290,7 +290,7 @@ void mtsGalilController::Cleanup(){
         Close();
         CMN_LOG_CLASS_RUN_VERBOSE << "Closed Galil Controller." << std::endl;
     }
-    catch (std::runtime_error e)
+    catch (const std::runtime_error &e)
     {
         throw e;
     }
@@ -335,7 +335,8 @@ void mtsGalilController::Close()
         SendCommandString("ST");
         DisableAllMotorPower();
         GClose(m_Galil);
-        delete m_Galil;
+        // PK: I do not think it is necessary or correct to delete m_Galil
+        // delete m_Galil;
     }
 }
 
@@ -363,18 +364,15 @@ void mtsGalilController::ConnectToGalilController(const std::string &deviceName)
 
         CMN_LOG_CLASS_INIT_VERBOSE << "Galil Servo Loop Time is " << m_ServoLoopTime / 1000.0 << " ms" << std::endl;
     }
-    catch (std::string e) // error
+    catch (const std::string &e) // error
     {
         CMN_LOG_CLASS_INIT_ERROR << e << std::endl;
         if (std::string::npos != e.find("COMMAND ERROR"))
             CMN_LOG_CLASS_INIT_ERROR << "a command error occurred" << std::endl; // special processing for command errors
-
-        return;
     }
-    catch (std::runtime_error e) // error
+    catch (const std::runtime_error &e) // error
     {
         CMN_LOG_CLASS_RUN_ERROR << e.what() << std::endl;
-        return;
     }
     return;
 }
@@ -388,7 +386,7 @@ void mtsGalilController::EnableAllMotorPower()
     {
         this->SendCommandString("SH");
     }
-    catch (std::string e)
+    catch (const std::string &e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Enable motor failed  \"" << e << "\"" << std::endl;
         cmnThrow(std::runtime_error("Enable motor failed "));
@@ -405,7 +403,7 @@ void mtsGalilController::DisableAllMotorPower()
         this->StopMotionAll();
         SendCommandString("MO");
     }
-    catch (std::string e)
+    catch (const std::string &e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Disable motor failed  \"" << e << "\"" << std::endl;
         cmnThrow(std::runtime_error("Disable motor failed "));
@@ -421,7 +419,7 @@ void mtsGalilController::EnableMotorPower(const mtsBoolVec &mask)
         CreateCommandForAxis(buffer, "SH", mask);
         SendCommandString(buffer);
     }
-    catch (std::string e)
+    catch (const std::string &e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Enable motor failed  \"" << e << "\"" << std::endl;
         cmnThrow(std::runtime_error("Enable motor failed "));
@@ -439,7 +437,7 @@ void mtsGalilController::DisableMotorPower(const mtsBoolVec &mask)
         CreateCommandForAxis(buffer, "MO", mask);
         SendCommandString(buffer);
     }
-    catch (std::string e)
+    catch (const std::string &e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Disable motor Failed  \"" << e << "\"" << std::endl;
         cmnThrow(std::runtime_error("Disable motor Failed "));
@@ -456,7 +454,7 @@ void mtsGalilController::StopMotionAll()
         all.SetAll(true);
         StopMotion(all);
     }
-    catch (std::string e)
+    catch (const std::string &e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Stop Motion failed  \"" << e << "\"" << std::endl;
         cmnThrow(std::runtime_error("Stop Motion error "));
@@ -481,7 +479,7 @@ void mtsGalilController::StopMotion(const mtsBoolVec &mask)
             SendCommandString(buffer);
         }
     }
-    catch (std::string e)
+    catch (const std::string &e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Stop Motion failed  \"" << e << "\"" << std::endl;
         cmnThrow(std::runtime_error("Stop Motion  error "));
@@ -523,12 +521,12 @@ void mtsGalilController::Home(const mtsBoolVec &mask)
         SendCommandString(buffer);
     }
 
-    catch (std::runtime_error e)
+    catch (const std::runtime_error &e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Homing failed: Error  \"" << e.what() << "\"" << std::endl;
         cmnThrow(std::runtime_error("Homing error "));
     }
-    catch (std::string e)
+    catch (const std::string &e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Homing failed: Error  \"" << e << "\"" << std::endl;
         cmnThrow(std::runtime_error("Homing error "));
@@ -551,7 +549,7 @@ void mtsGalilController::UnHome(const mtsBoolVec &mask)
         CreateCommand(buffer, "ZA", mask, homeValue);
         SendCommandString(buffer);
     }
-    catch (std::string e)
+    catch (const std::string &e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "UnHoming failed: Error  \"" << e << "\"" << std::endl;
         cmnThrow(std::runtime_error("UnHoming error "));
@@ -737,7 +735,7 @@ void mtsGalilController::GetActuatorState(prmActuatorState &state)
         // 21 Begin not valid while running 100 Not valid when running ECAM
         // 22 Begin not possible due to Limit Switch 101 Improper index into ET (must be 0-256)
     }
-    catch (std::string e)
+    catch (const std::string &e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "GetActuatorState: Error  \"" << e << "\"" << std::endl;
         cmnThrow(std::runtime_error("GetActuatorState: Error "));
@@ -914,7 +912,7 @@ void mtsGalilController::StopMovement(const mtsBoolVec &mask, double timeout)
     {
         this->WaitMotion(mask, timeout);
     }
-    catch (std::runtime_error e)
+    catch (const std::runtime_error &e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Stop movement failed: " << e.what() << std::endl;
         cmnThrow(std::runtime_error(std::string("Stop movement failed with error") + e.what()));
@@ -956,7 +954,7 @@ void mtsGalilController::WaitMotion(const mtsBoolVec &mask, double timeout)
         if (timer.GetElapsedTime() > timeout)
             cmnThrow(std::runtime_error(std::string("Timeout reached:")));
     }
-    catch (std::string e)
+    catch (const std::string &e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Wait for Motion failed: " << e << std::endl;
         cmnThrow(std::runtime_error(std::string("Wait for motion error") + e));
@@ -984,7 +982,7 @@ std::string mtsGalilController::SendCommandString(const std::string &cmd)
 
         response = BufferToGCStringOut(buffer, G_SMALL_BUFFER);
     }
-    catch (GReturn rc)
+    catch (const GReturn &rc)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Error for command \\" << cmd << "\\" << std::endl;
         CMN_LOG_CLASS_RUN_ERROR << "Galil error code: " << rc << std::endl;
@@ -1022,7 +1020,7 @@ int mtsGalilController::SendCommandInt(const std::string &cmd)
         CheckErrorGCommand(
             GCmdI(m_Galil, cmd.c_str(), &response));
     }
-    catch (GReturn rc)
+    catch (const GReturn &rc)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Error for command \\" << cmd << "\\" << std::endl;
         CMN_LOG_CLASS_RUN_ERROR << "Galil error code: " << rc << std::endl;
@@ -1061,7 +1059,7 @@ double mtsGalilController::SendCommandDouble(const std::string &cmd)
         CheckErrorGCommand(
             GCmdD(m_Galil, cmd.c_str(), &response));
     }
-    catch (GReturn rc)
+    catch (const GReturn &rc)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Error for command \\" << cmd << "\\" << std::endl;
         CMN_LOG_CLASS_RUN_ERROR << "Galil error code: " << rc << std::endl;
