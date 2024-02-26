@@ -240,18 +240,7 @@ void mtsGalilControllerDR::Configure(const std::string& fileName)
 
     // Galil Startup Program
     if (jsonConfig.isMember("DMC_Startup_Program")) {
-        dmcStartupFile = jsonConfig["DMC_Startup_Program"].asString();
-    }
-
-    // upload a dmc program file if available
-    if (dmcStartupFile.length() > 0) {
-        if (cmnPath::Exists(dmcStartupFile)) {
-            GProgramUploadFile(mGalil, dmcStartupFile.c_str());
-        }
-        else {
-            CMN_LOG_CLASS_INIT_ERROR << "Configure: Invalid DMC program file \""
-                                     << dmcStartupFile << "\"" << std::endl;
-        }
+        mDmcFile = jsonConfig["DMC_Startup_Program"].asString();
     }
 }
 
@@ -266,6 +255,17 @@ void mtsGalilControllerDR::Startup()
         CMN_LOG_CLASS_INIT_ERROR << "Galil GOpen: error opening " << mDeviceName
                                  << ": " << ret << std::endl;
         return;
+    }
+
+    // Upload a DMC program file if available
+    if (!mDmcFile.empty()) {
+        if (cmnPath::Exists(mDmcFile)) {
+            GProgramUploadFile(mGalil, mDmcFile.c_str());
+        }
+        else {
+            CMN_LOG_CLASS_INIT_ERROR << "Configure: DMC program file \""
+                                     << mDmcFile << "\" not found" << std::endl;
+        }
     }
     ret = GRecordRate(mGalil, mDR_Period_ms);
     if (ret != G_NO_ERROR) {

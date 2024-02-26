@@ -50,6 +50,7 @@ class CISST_EXPORT mtsGalilControllerDR : public mtsTaskContinuous
     bool          mDirectMode;     // Direct connection (not using gcaps)
     unsigned int  mDR_Period_ms;   // DR period, in milliseconds
     unsigned int  mModel;          // Galil model (see list of supported models above)
+    std::string   mDmcFile;        // DMC program to download to Galil on startup
     unsigned int  mNumAxes;        // Number of axes
     uint32_t      mHeader;         // Header bytes in DR packet
     uint16_t      mSampleNum;      // Sample number from controller

@@ -229,7 +229,6 @@ protected:
 
 private:
     static inline void CheckErrorGCommand(GReturn rc) { if (rc != G_NO_ERROR) throw rc; }
-    static GCStringOut BufferToGCStringOut(char* buffer, unsigned int buffer_size);
 
     void ConnectToGalilController(const std::string& deviceName);
 
@@ -250,6 +249,9 @@ private:
     // galil controller class handle
     GCon         m_Galil;
     std::string  m_DeviceName;
+
+    // DMC program to download to Galil on startup
+    std::string   mDmcFile;
 
     // internal variable used to calculate velocity times.
     double            m_ServoLoopTime;

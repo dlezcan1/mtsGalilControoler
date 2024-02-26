@@ -114,8 +114,8 @@ void mtsGalilController::Configure(const std::string& fileName)
         if (jsonConfig.isMember("DMC_Startup_Program"))
         {
             std::cout << "Before dmcStartupFile addition\n";
-            dmcStartupFile = jsonConfig["DMC_Startup_Program"].asString();
-            std::cout << "After dmcStartupFile addition: " << dmcStartupFile << std::endl;
+            mDmcFile = jsonConfig["DMC_Startup_Program"].asString();
+            std::cout << "After dmcStartupFile addition: " << mDmcFile << std::endl;
         }
     }
     catch (...)
@@ -124,24 +124,6 @@ void mtsGalilController::Configure(const std::string& fileName)
                                  << ": make sure the file \""
                                  << fileName << "\" is in JSON format"
                                  << std::endl;
-    }
-
-    // upload a dmc program file if available
-    if (dmcStartupFile.length() > 0)
-    {
-        if (cmnPath::Exists(dmcStartupFile))
-        {
-            std::cout << "After testFile is good\n";
-            ProgramUploadFile(dmcStartupFile);
-        }
-        else
-        {
-            CMN_LOG_CLASS_INIT_ERROR << "Configure " << this->GetName() << ": "
-                                     << "No dmc program file exists: \""
-                                     << dmcStartupFile
-                                     << "\""
-                                     << std::endl;;
-        }
     }
 
     // Galil Controller Command config
@@ -279,6 +261,25 @@ void mtsGalilController::SetupInterfaces()
 
 void mtsGalilController::Startup(){
     ConnectToGalilController(m_DeviceName);
+
+    // upload a DMC program file if available
+    if (mDmcFile.length() > 0)
+    {
+        if (cmnPath::Exists(mDmcFile))
+        {
+            std::cout << "After testFile is good\n";
+            ProgramUploadFile(mDmcFile);
+        }
+        else
+        {
+            CMN_LOG_CLASS_INIT_ERROR << "Configure " << this->GetName() << ": "
+                                     << "No dmc program file exists: \""
+                                     << mDmcFile
+                                     << "\""
+                                     << std::endl;;
+        }
+    }
+
     m_StateTable.Start();
 }
 
@@ -319,15 +320,6 @@ void mtsGalilController::SetTimeout(const double& timeout, bool& success){
 }
 
 /* ================== Galil Controller Interface ============================== */
-
-GCStringOut mtsGalilController::BufferToGCStringOut(char *buffer, unsigned int buffer_size)
-{
-    GCStringOut stringout = new char[G_SMALL_BUFFER];
-
-    memcpy(stringout, buffer, buffer_size);
-
-    return stringout;
-}
 
 void mtsGalilController::AbortProgram()
 {
@@ -982,10 +974,9 @@ void mtsGalilController::WaitMotion(const vctBoolVec &mask, double timeout)
 }
 
 // SendCommand:  send a command to the Galil controller.
-// Returns ref to the static buffer for the response message.
+// Returns response string.
 std::string mtsGalilController::SendCommandString(const std::string &cmd)
 {
-    GCStringOut response;
     if (!m_Galil)
     {
         cmnThrow(std::runtime_error("SendCommandString: ( No Controller Handle = Not Connected )"));
@@ -993,13 +984,11 @@ std::string mtsGalilController::SendCommandString(const std::string &cmd)
     }
     CMN_LOG_CLASS_RUN_DEBUG << "Sending to Galil [" << cmd << "]" << std::endl;
 
-    GCStringOut buffer;
+    char response[G_SMALL_BUFFER];
     try
     {
         CheckErrorGCommand(
-            GCmdT(m_Galil, cmd.c_str(), buffer, G_SMALL_BUFFER, NULL));
-
-        response = BufferToGCStringOut(buffer, G_SMALL_BUFFER);
+            GCmdT(m_Galil, cmd.c_str(), response, G_SMALL_BUFFER, NULL));
     }
     catch (const GReturn &rc)
     {
