@@ -81,9 +81,11 @@ if (cisst_FOUND_AS_REQUIRED)
     
     set (sawGalilController_HEADER_FILES
          "${sawGalilController_INCLUDE_DIR}/sawGalilController/mtsGalilController.h"
+         "${sawGalilController_INCLUDE_DIR}/sawGalilController/mtsGalilControllerDR.h"
          "${sawGalilController_INCLUDE_DIR}/sawGalilController/sawGalilControllerExport.h")
     set (sawGalilController_SOURCE_FILES
-         code/mtsGalilController.cpp)
+         code/mtsGalilController.cpp
+         code/mtsGalilControllerDR.cpp)
 
    # add all config files for this component
    cisst_add_config_files (sawGalilController)
