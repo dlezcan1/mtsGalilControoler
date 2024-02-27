@@ -58,6 +58,8 @@ class CISST_EXPORT mtsGalilControllerDR : public mtsTaskContinuous
     prmStateJoint m_setpoint_js;   // Setpoint joint state (CRTK)
     vctUIntVec    mAxisToGalilChannelMap;   // Map from axis index to Galil channel
     vctDoubleVec  mEncoderCountsPerUnit;    // Encoder conversion factors
+    vctUCharVec   mStopCode;                // Axis stop code (see Galil SC command)
+    vctUCharVec   mSwitches;                // Axis switches (see Galil TS command)
     mtsInterfaceProvided *mInterface;       // Provided interface
 
  public:

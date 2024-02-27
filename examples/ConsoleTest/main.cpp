@@ -123,8 +123,6 @@ public:
         const prmStateJoint *psj = dynamic_cast<const prmStateJoint *>(p);
         if (psj) NumAxes = psj->Position().size();
 #else
-        // Following does not yet work because GetActuatorState is added to
-        // provided interface before sizes are set.
         const mtsGenericObject *p = GetActuatorState.GetArgumentPrototype();
         const prmActuatorState *pas = dynamic_cast<const prmActuatorState *>(p);
         if (pas) NumAxes = pas->Position().size();

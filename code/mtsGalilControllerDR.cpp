@@ -223,6 +223,8 @@ void mtsGalilControllerDR::Configure(const std::string& fileName)
 
     mAxisToGalilChannelMap.SetSize(mNumAxes);
     mEncoderCountsPerUnit.SetSize(mNumAxes);
+    mStopCode.SetSize(mNumAxes);
+    mSwitches.SetSize(mNumAxes);
 
     for (Json::ArrayIndex i = 0; i < axesArray.size(); i++) {
         const Json::Value curAxis = axesArray[i];
@@ -320,6 +322,8 @@ void mtsGalilControllerDR::Run()
                 m_measured_js.Velocity()[i] = mEncoderCountsPerUnit[i] * axisPtr->vel;
                 m_measured_js.Effort()[i] = axisPtr->torque;
                 m_setpoint_js.Position()[i] = mEncoderCountsPerUnit[i] * axisPtr->ref_pos;
+                mStopCode[i] = axisPtr->stop_code;    // See Galil SC command
+                mSwitches[i] = axisPtr->switches;     // See Galil TS command
             }
         }
         else {
