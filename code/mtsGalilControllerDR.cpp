@@ -70,6 +70,8 @@ const unsigned int AxisDataOffset[NUM_MODELS] = {    82,    82,    78 ,   44,   
 // Size of the axis data
 const size_t AxisDataSize[NUM_MODELS]         = { ADmax, ADmax, ADmin, ADmin, ADmin, ADmax };
 // Whether the first 4 bytes contain header information
+// Galil does not document the contents of the header. For at least one DMC-4143, the header
+// bytes are: 135 (0x87), 15 (0xf), 226 (0xe2), 0
 const bool HasHeader[NUM_MODELS]              = {  true,  true, false,  true, false,  true };
 // Byte offset to the sample number
 const unsigned int SampleOffset[NUM_MODELS]   = {     4,     4,     0,     4,     0,     4 };
@@ -77,13 +79,13 @@ const unsigned int SampleOffset[NUM_MODELS]   = {     4,     4,     0,     4,   
 CMN_IMPLEMENT_SERVICES_DERIVED_ONEARG(mtsGalilControllerDR, mtsTaskContinuous, mtsTaskContinuousConstructorArg)
 
 mtsGalilControllerDR::mtsGalilControllerDR(const std::string &name, unsigned int sizeStateTable, bool newThread) :
-    mtsTaskContinuous(name, sizeStateTable, newThread), mGalil(0)
+    mtsTaskContinuous(name, sizeStateTable, newThread), mGalil(0), mHeader(0)
 {
     Init();
 }
 
 mtsGalilControllerDR::mtsGalilControllerDR(const mtsTaskContinuousConstructorArg & arg) :
-    mtsTaskContinuous(arg), mGalil(0)
+    mtsTaskContinuous(arg), mGalil(0), mHeader(0)
 {
     Init();
 }
@@ -95,7 +97,12 @@ mtsGalilControllerDR::~mtsGalilControllerDR()
 
 void mtsGalilControllerDR::Init(void)
 {
-    mHeader = 0;
+    // Call SetupInterfaces after Configure, for reasons documented below
+    // (see comment at end of Configure method).
+}
+
+void mtsGalilControllerDR::SetupInterfaces(void)
+{
     StateTable.AddData(mHeader, "dr_header");
     StateTable.AddData(mSampleNum, "sample_num");
     StateTable.AddData(m_measured_js, "measured_js");
@@ -189,7 +196,7 @@ void mtsGalilControllerDR::Configure(const std::string& fileName)
     CMN_LOG_CLASS_INIT_VERBOSE << "Configure: setting Galil model to " << modelType
                                << " (index = " << mModel << ")" << std::endl;
 
-    unsigned int mDR_Period_ms = jsonConfig.get("DR_Period_ms", 2).asUInt();
+    mDR_Period_ms = jsonConfig.get("DR_Period_ms", 2).asUInt();
     CMN_LOG_CLASS_INIT_VERBOSE << "Configure: setting DR period to " << mDR_Period_ms << " ms" << std::endl;
 
     // Get axes array
@@ -206,9 +213,13 @@ void mtsGalilControllerDR::Configure(const std::string& fileName)
     // Now, set the data sizes
     // We have position, velocity and effort for measured_js
     m_measured_js.SetSize(mNumAxes);
+    m_measured_js.Position().SetAll(0.0);
+    m_measured_js.Velocity().SetAll(0.0);
+    m_measured_js.Effort().SetAll(0.0);
     // We have only position for setpoint_js
     m_setpoint_js.Name().SetSize(mNumAxes);
     m_setpoint_js.Position().SetSize(mNumAxes);
+    m_setpoint_js.Position().SetAll(0.);
 
     mAxisToGalilChannelMap.SetSize(mNumAxes);
     mEncoderCountsPerUnit.SetSize(mNumAxes);
@@ -242,6 +253,13 @@ void mtsGalilControllerDR::Configure(const std::string& fileName)
     if (jsonConfig.isMember("DMC_Startup_Program")) {
         mDmcFile = jsonConfig["DMC_Startup_Program"].asString();
     }
+
+    // Call SetupInterfaces after Configure because we need to know the correct sizes of
+    // the dynamic vectors, which are based on the number of configured axes.
+    // These sizes should be set before calling StateTable.AddData and AddCommandReadState;
+    // in the latter case, this ensures that the argument prototype has the correct size.
+    SetupInterfaces();
+
 }
 
 void mtsGalilControllerDR::Startup()
@@ -279,26 +297,35 @@ void mtsGalilControllerDR::Startup()
 void mtsGalilControllerDR::Run()
 {
     GDataRecord gRec;
+    GReturn ret;
 
     // Get the Galil data record (DR) and parse it
-    if (mGalil && (GRecord(mGalil, &gRec, G_DR) == G_NO_ERROR)) {
-        // First 4 bytes are header (for most controllers)
-        if (HasHeader[mModel])
-            mHeader = *reinterpret_cast<uint32_t *>(gRec.byte_array);
-        // Controller sample number
-        mSampleNum = *reinterpret_cast<uint16_t *>(gRec.byte_array + SampleOffset[mModel]);
-        // Get the axis data
-        // Since we currently do not care about the last 3 entries (in AxisDataMax), we
-        // just cast to AxisDataMin and handle the different offsets.
-        for (size_t i = 0; i < mNumAxes; i++) {
-            unsigned int galilAxis = mAxisToGalilChannelMap[i];
-            AxisDataMin *axisPtr = reinterpret_cast<AxisDataMin *>(gRec.byte_array +
-                                                                   AxisDataOffset[mModel] +
-                                                                   galilAxis*AxisDataSize[mModel]);
-            m_measured_js.Position()[i] = mEncoderCountsPerUnit[i] * axisPtr->pos;
-            m_measured_js.Velocity()[i] = mEncoderCountsPerUnit[i] * axisPtr->vel;
-            m_measured_js.Effort()[i] = axisPtr->torque;
-            m_setpoint_js.Position()[i] = mEncoderCountsPerUnit[i] * axisPtr->ref_pos;
+    if (mGalil) {
+        ret = GRecord(mGalil, &gRec, G_DR);
+        if (ret == G_NO_ERROR) {
+            // First 4 bytes are header (for most controllers)
+            if (HasHeader[mModel])
+                mHeader = *reinterpret_cast<uint32_t *>(gRec.byte_array);
+            // Controller sample number
+            mSampleNum = *reinterpret_cast<uint16_t *>(gRec.byte_array + SampleOffset[mModel]);
+            // Get the axis data
+            // Since we currently do not care about the last 3 entries (in AxisDataMax), we
+            // just cast to AxisDataMin and handle the different offsets.
+            for (size_t i = 0; i < mNumAxes; i++) {
+                unsigned int galilAxis = mAxisToGalilChannelMap[i];
+                AxisDataMin *axisPtr = reinterpret_cast<AxisDataMin *>(gRec.byte_array +
+                                                                       AxisDataOffset[mModel] +
+                                                                       galilAxis*AxisDataSize[mModel]);
+                m_measured_js.Position()[i] = mEncoderCountsPerUnit[i] * axisPtr->pos;
+                m_measured_js.Velocity()[i] = mEncoderCountsPerUnit[i] * axisPtr->vel;
+                m_measured_js.Effort()[i] = axisPtr->torque;
+                m_setpoint_js.Position()[i] = mEncoderCountsPerUnit[i] * axisPtr->ref_pos;
+            }
+        }
+        else {
+            char buf[128];
+            sprintf(buf, ": GRecord error %d", ret);
+            mInterface->SendError(this->GetName() + buf);
         }
     }
 
@@ -386,7 +413,7 @@ void mtsGalilControllerDR::servo_common(const char *cmdName, const char *cmdGali
     strcpy(BG_buffer, "BG ");
     size_t Cmd_len = strlen(Cmd_buffer);
     size_t BG_len = 3;
-    for (i = 0; i < galilIndexMax; i++) {
+    for (i = 0; i <= galilIndexMax; i++) {
         if (galilDataValid[i]) {
             sprintf(Cmd_buffer+Cmd_len, "%ld", galilData[i]);
             Cmd_len = strlen(Cmd_buffer);
@@ -398,8 +425,6 @@ void mtsGalilControllerDR::servo_common(const char *cmdName, const char *cmdGali
         BG_buffer[BG_len++] = static_cast<char>('A'+i);
         BG_buffer[BG_len] = 0;
     }
-    CMN_LOG_CLASS_RUN_VERBOSE << cmdName << ": sending \"" << Cmd_buffer << "\", followed by \""
-                              << BG_buffer << "\" to Galil" << std::endl;
     SendCommand(Cmd_buffer);
     SendCommand(BG_buffer);
 }

@@ -51,13 +51,11 @@ CMN_IMPLEMENT_SERVICES_DERIVED_ONEARG(mtsGalilController, mtsTaskPeriodic, mtsTa
 mtsGalilController::mtsGalilController(const std::string & componentName, double period_secs) :
                     mtsTaskPeriodic(componentName, period_secs), m_StateTable(10000, "GalilState")
 {
-    SetupInterfaces();
 }
 
 mtsGalilController::mtsGalilController(const mtsTaskPeriodicConstructorArg & arg) :
                     mtsTaskPeriodic(arg), m_StateTable(10000, "GalilState")
 {
-    SetupInterfaces();
 }
 
 mtsGalilController::~mtsGalilController()
@@ -129,6 +127,12 @@ void mtsGalilController::Configure(const std::string& fileName)
     // Galil Controller Command config
 
     // set the size of the vectors:
+    m_ActuatorState.SetSize(GetNumberActuators());
+    // prmActuatorState does not initialize its members
+    // after calling SetSize
+    m_ActuatorState.Position().SetAll(0.0);
+    m_ActuatorState.Velocity().SetAll(0.0);
+
     m_IsHomed.SetSize(GetNumberActuators());
     m_IsHomed.SetAll(false); // this state is not available on the controller
 
@@ -187,6 +191,10 @@ void mtsGalilController::Configure(const std::string& fileName)
         sprintf(digitalStr, "@IN[%02d]", Encoder_pins[i]);
         DI.push_back(std::string(digitalStr));
     }
+
+    // Call SetupInterfaces after Configure because we need to know the correct sizes of
+    // the dynamic vectors, which are based on the number of configured axes.
+    SetupInterfaces();
 }
 
 void mtsGalilController::SetupInterfaces()
@@ -575,8 +583,6 @@ void mtsGalilController::GetActuatorState(prmActuatorState &state)
     // InMotion returns the motion profile finished, typically there is some hysteresis in the control
     // algorithm, so the profile finishes assuming perfect tracking, and the servo loop tries to
     // catch up.
-    state.SetSize(GetNumberActuators());
-
     state.InMotion().Zeros();
     state.MotorOff().Zeros();
     state.SoftFwdLimitHit().Zeros();

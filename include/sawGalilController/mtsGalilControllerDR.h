@@ -43,7 +43,7 @@ http://www.cisst.org/cisst/license.txt.
 
 class CISST_EXPORT mtsGalilControllerDR : public mtsTaskContinuous
 {
-    CMN_DECLARE_SERVICES(CMN_DYNAMIC_CREATION_ONEARG, CMN_LOG_LOD_RUN_ERROR);
+    CMN_DECLARE_SERVICES(CMN_DYNAMIC_CREATION_ONEARG, CMN_LOG_LOD_RUN_ERROR)
 
     void         *mGalil;          // Gcon
     std::string   mDeviceName;     // IP address
@@ -62,7 +62,7 @@ class CISST_EXPORT mtsGalilControllerDR : public mtsTaskContinuous
 
  public:
 
-    mtsGalilControllerDR(const std::string &name, unsigned int sizeStateTable, bool newThread);
+    mtsGalilControllerDR(const std::string &name, unsigned int sizeStateTable = 1024, bool newThread = true);
     mtsGalilControllerDR(const mtsTaskContinuousConstructorArg &arg);
 
     ~mtsGalilControllerDR();
@@ -77,6 +77,8 @@ protected:
 
     void Init();
     void Close();
+
+    void SetupInterfaces();
 
     void GetNumAxes(unsigned int &numAxes) const { numAxes = mNumAxes; }
     void GetHeader(uint32_t &header) const { header = mHeader; }
