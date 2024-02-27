@@ -1,10 +1,28 @@
-#include "mtsGalilController/mtsGalilController.h"
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-    */
+/* ex: set filetype=cpp softtabstop=4 shiftwidth=4 tabstop=4 cindent expandtab: */
 
-#include <cisstOSAbstraction.h>
+/*
+  (C) Copyright 2024 Johns Hopkins University (JHU), All Rights Reserved.
+
+--- begin cisst license - do not edit ---
+
+This software is provided "as is" under an open source license, with
+no warranty.  The complete license can be found in license.txt and
+http://www.cisst.org/cisst/license.txt.
+
+--- end cisst license ---
+*/
+
 #include <cisstCommon/cmnDataFormat.h>
+#include <cisstCommon/cmnUnits.h>
+#include <cisstCommon/cmnPath.h>
+#include <cisstOSAbstraction/osaSleep.h>
+#include <cisstOSAbstraction/osaStopwatch.h>
+#include <cisstMultiTask/mtsInterfaceProvided.h>
 
+#include <sawGalilController/mtsGalilController.h>
 
-CMN_IMPLEMENT_SERVICES(mtsGalilController);
+CMN_IMPLEMENT_SERVICES_DERIVED_ONEARG(mtsGalilController, mtsTaskPeriodic, mtsTaskPeriodicConstructorArg)
 
 #define MTS_ADD_COMMAND_CHECK( AddCommandFunc, interface, function, object, name) \
     if (!interface->AddCommandFunc(function, object, name)) \
@@ -13,18 +31,31 @@ CMN_IMPLEMENT_SERVICES(mtsGalilController);
                                  << interface->GetFullName() \
                                  << "\"" << std::endl; \
     }
+
+#if 0
+// Some compilers do not support following
 #define MTS_ADD_COMMAND_READ_CHECK(...) MTS_ADD_COMMAND_CHECK(AddCommandRead, ##__VA_ARGS__)
 #define MTS_ADD_COMMAND_VOID_CHECK(...) MTS_ADD_COMMAND_CHECK(AddCommandVoid, ##__VA_ARGS__)
 #define MTS_ADD_COMMAND_WRITE_CHECK(...) MTS_ADD_COMMAND_CHECK(AddCommandWrite, ##__VA_ARGS__)
 
-mtsGalilController::mtsGalilController(const std::string & componentName, double period_secs) : mtsTaskPeriodic(componentName, period_secs), m_StateTable(10000, "GalilState")
+#else
+
+#define MTS_ADD_COMMAND_READ_CHECK(interface, function, object, name)   \
+        MTS_ADD_COMMAND_CHECK(AddCommandRead, interface, function, object, name)
+#define MTS_ADD_COMMAND_VOID_CHECK(interface, function, object, name) \
+        MTS_ADD_COMMAND_CHECK(AddCommandVoid, interface, function, object, name)
+#define MTS_ADD_COMMAND_WRITE_CHECK(interface, function, object, name) \
+        MTS_ADD_COMMAND_CHECK(AddCommandWrite, interface, function, object, name)
+#endif
+
+mtsGalilController::mtsGalilController(const std::string & componentName, double period_secs) :
+                    mtsTaskPeriodic(componentName, period_secs), m_StateTable(10000, "GalilState")
 {
-    SetupInterfaces();
 }
 
-mtsGalilController::mtsGalilController(const mtsTaskPeriodicConstructorArg & arg) : mtsTaskPeriodic(arg), m_StateTable(10000, "GalilState")
+mtsGalilController::mtsGalilController(const mtsTaskPeriodicConstructorArg & arg) :
+                    mtsTaskPeriodic(arg), m_StateTable(10000, "GalilState")
 {
-    SetupInterfaces();
 }
 
 mtsGalilController::~mtsGalilController()
@@ -35,7 +66,7 @@ mtsGalilController::~mtsGalilController()
 void mtsGalilController::Configure(const std::string& fileName)
 {
     std::string dmcStartupFile;
-    
+
     try
     {
         std::ifstream jsonStream;
@@ -58,11 +89,12 @@ void mtsGalilController::Configure(const std::string& fileName)
                                    << jsonConfig << std::endl
                                    << "<----" << std::endl;
 
-
         m_DeviceName = jsonConfig["IP_Address"].asString();
-
         // Configure the axes
         Json::Value axesConfig = jsonConfig["Axes"];
+        m_EncoderCountsPerUnit.SetSize(axesConfig.size());
+        m_AxisToGalilChannelMappings.SetSize(axesConfig.size());
+        m_GalilToAxisChannelMappings.SetSize(axesConfig.size());
         for (auto it = axesConfig.begin(); it != axesConfig.end(); it++)
         {
             unsigned int axisIndex = it.index();
@@ -75,13 +107,13 @@ void mtsGalilController::Configure(const std::string& fileName)
             m_GalilToAxisChannelMappings.Data()[galilIndex] = axisIndex;
             m_GalilToAxisChannelMappings.Mask()[galilIndex] = true;
         }
-        
+
         // Galil Startup Program
         if (jsonConfig.isMember("DMC_Startup_Program"))
         {
             std::cout << "Before dmcStartupFile addition\n";
-            dmcStartupFile = jsonConfig["DMC_Startup_Program"].asString();
-            std::cout << "After dmcStartupFile addition: " << dmcStartupFile << std::endl;
+            mDmcFile = jsonConfig["DMC_Startup_Program"].asString();
+            std::cout << "After dmcStartupFile addition: " << mDmcFile << std::endl;
         }
     }
     catch (...)
@@ -92,49 +124,38 @@ void mtsGalilController::Configure(const std::string& fileName)
                                  << std::endl;
     }
 
-
-    // upload a dmc program file if available
-    if (dmcStartupFile.length() > 0)
-    {   
-        if (cmnPath::Exists(dmcStartupFile))
-        {
-            std::cout << "After testFile is good\n";
-            ProgramUploadFile(dmcStartupFile);
-        }
-        else
-        {
-            CMN_LOG_CLASS_INIT_ERROR << "Configure " << this->GetName() << ": "
-                                     << "No dmc program file exists: \""
-                                     << dmcStartupFile
-                                     << "\""
-                                     << std::endl;;
-        }
-    }
-
     // Galil Controller Command config
 
     // set the size of the vectors:
+    m_ActuatorState.SetSize(GetNumberActuators());
+    // prmActuatorState does not initialize its members
+    // after calling SetSize
+    m_ActuatorState.Position().SetAll(0.0);
+    m_ActuatorState.Velocity().SetAll(0.0);
+
     m_IsHomed.SetSize(GetNumberActuators());
     m_IsHomed.SetAll(false); // this state is not available on the controller
 
     m_AnalogInput.SetSize(GetNumberActuators());
     m_AnalogInput.Zeros();
 
-    m_EncoderCountsPerUnit.SetSize(GetNumberActuators());
-    m_EncoderCountsPerUnit.SetAll(1.0); // default to use encoder counts
+    // PK: size set above
+    // m_EncoderCountsPerUnit.SetSize(GetNumberActuators());
+    // m_EncoderCountsPerUnit.SetAll(1.0); // default to use encoder counts
 
     // Disha- encoder
     unsigned int Encoder_pins[] = {9, 12, 15, 11, 14, 10, 13, 8, 1, 2};
-    m_NumberEncoderPins = sizeof(Encoder_pins) / sizeof(Encoder_pins[0]);
-    m_DigitalInput.SetSize(m_NumberEncoderPins);
+    const size_t NumberEncoderPins = sizeof(Encoder_pins) / sizeof(Encoder_pins[0]);
+    m_NumberEncoderPins = NumberEncoderPins;
+    m_DigitalInput.SetSize(NumberEncoderPins);
     m_DigitalInput.Zeros();
 
     m_Galil = nullptr;
     // max number of actuator is 8 here
     char analogStr[7];
     // Disha-encoder
-    char digitalStr[m_NumberEncoderPins];
-    memset(digitalStr, 0, sizeof(char) * m_NumberEncoderPins);
+    char digitalStr[NumberEncoderPins];
+    memset(digitalStr, 0, sizeof(char) * NumberEncoderPins);
     memset(analogStr, 0, sizeof(char) * 7);
 
     m_SoftRevLimitHit.SetSize(GetNumberActuators());
@@ -170,7 +191,10 @@ void mtsGalilController::Configure(const std::string& fileName)
         sprintf(digitalStr, "@IN[%02d]", Encoder_pins[i]);
         DI.push_back(std::string(digitalStr));
     }
-    
+
+    // Call SetupInterfaces after Configure because we need to know the correct sizes of
+    // the dynamic vectors, which are based on the number of configured axes.
+    SetupInterfaces();
 }
 
 void mtsGalilController::SetupInterfaces()
@@ -179,7 +203,7 @@ void mtsGalilController::SetupInterfaces()
     m_StateTable.AddData(m_ActuatorState, "ActuatorState");
 
     // Add the interface
-    mtsInterfaceProvided* intfProvided = this->AddInterfaceProvided("GalilController");
+    mtsInterfaceProvided* intfProvided = this->AddInterfaceProvided("control");
     if (!intfProvided)
     {
         CMN_LOG_CLASS_INIT_ERROR << "Error adding \"GalilController\" provided interface \"" 
@@ -190,6 +214,12 @@ void mtsGalilController::SetupInterfaces()
 
     // Add command to control galil controller
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::SendCommand, this, "SendCommand");
+    if (!intfProvided->AddCommandWriteReturn(&mtsGalilController::SendCommandRet, this, "SendCommandRet"))
+    {
+        CMN_LOG_CLASS_INIT_ERROR << "Failed to add mtsGalilController::SendCommandRet to \""
+                                 << intfProvided->GetFullName()
+                                 << "\"" << std::endl;
+    }
     if (!intfProvided->AddCommandWriteReturn(&mtsGalilController::SetTimeout, this, "SetTimeout"))
     {
         CMN_LOG_CLASS_INIT_ERROR << "Failed to add mtsGalilController::SetTimeout to \"" 
@@ -213,42 +243,67 @@ void mtsGalilController::SetupInterfaces()
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::SetAcceleration,     this, "SetAccleration");
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::SetDeceleration,     this, "SetDecleration");
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::SetSpeed,            this, "SetSpeed");
-    
+
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::SetAbsolutePosition, this, "SetAbsolutePosition");
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::SetPositionMove,     this, "SetPositionMove");
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::SetVelocityMove,     this, "SetVelocityMove");
-    
+
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::EnableMotorPower,     this, "EnableMotorPower");
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::DisableMotorPower,    this, "DisableMotorPower");
     MTS_ADD_COMMAND_VOID_CHECK(intfProvided,  &mtsGalilController::EnableAllMotorPower,  this, "EnableAllMotorPower");
     MTS_ADD_COMMAND_VOID_CHECK(intfProvided,  &mtsGalilController::DisableAllMotorPower, this, "DisableAllMotorPower");
-    
+
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::StopMotion,    this, "StopMotion");
     MTS_ADD_COMMAND_VOID_CHECK(intfProvided,  &mtsGalilController::StopMotionAll, this, "StopMotionAll");
-    
+
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::StopMovement, this, "StopMovement");
     MTS_ADD_COMMAND_WRITE_CHECK(intfProvided, &mtsGalilController::WaitMotion,   this, "WaitMotion");
 
     MTS_ADD_COMMAND_READ_CHECK(intfProvided, &mtsGalilController::GetAnalogInputs, this, "GetAnalogInputs");
+    MTS_ADD_COMMAND_READ_CHECK(intfProvided, &mtsGalilController::GetConnected, this, "GetConnected");
 
-    delete intfProvided;
+    // PK: not correct to delete following
+    //delete intfProvided;
 }
 
 
 void mtsGalilController::Startup(){
-    ConnectToGalilController(m_DeviceName.Data);
+    ConnectToGalilController(m_DeviceName);
+
+    // upload a DMC program file if available
+    if (mDmcFile.length() > 0)
+    {
+        if (cmnPath::Exists(mDmcFile))
+        {
+            std::cout << "After testFile is good\n";
+            ProgramUploadFile(mDmcFile);
+        }
+        else
+        {
+            CMN_LOG_CLASS_INIT_ERROR << "Configure " << this->GetName() << ": "
+                                     << "No dmc program file exists: \""
+                                     << mDmcFile
+                                     << "\""
+                                     << std::endl;;
+        }
+    }
+
+    m_StateTable.Start();
 }
 
 
-void mtsGalilController::Run(){
-    this->ProcessQueuedEvents();
-    // this->ProcessQueuedCommands();
+void mtsGalilController::Run()
+{
+    if (m_Galil) {
+        // Get the Galil State
+        GetActuatorState(m_ActuatorState);
+        m_StateTable.Advance();
+    }
 
-    // Get the Galil State
-    m_StateTable.Start();
-    GetActuatorState(m_ActuatorState);
-    m_StateTable.Advance();
+    // Call any connected components
+    RunEvent();
 
+    ProcessQueuedCommands();
 }
 
 void mtsGalilController::Cleanup(){
@@ -257,31 +312,22 @@ void mtsGalilController::Cleanup(){
         Close();
         CMN_LOG_CLASS_RUN_VERBOSE << "Closed Galil Controller." << std::endl;
     }
-    catch (std::runtime_error e)
+    catch (const std::runtime_error &e)
     {
-        throw e;    
+        throw e;
     }
 }
 
-void mtsGalilController::SetTimeout(const mtsDouble& timeout, mtsBool& success){ 
-    success.Data = false;
-    if (timeout > 0) 
+void mtsGalilController::SetTimeout(const double& timeout, bool& success){
+    success = false;
+    if (timeout > 0)
     {
-        success.Data = true;
-        m_timeout    = timeout;
+        success = true;
+        m_timeout = timeout;
     }
 }
 
 /* ================== Galil Controller Interface ============================== */
-
-GCStringOut mtsGalilController::BufferToGCStringOut(char *buffer, unsigned int buffer_size)
-{
-    GCStringOut stringout = new char[G_SMALL_BUFFER];
-
-    memcpy(stringout, buffer, buffer_size);
-
-    return stringout;
-}
 
 void mtsGalilController::AbortProgram()
 {
@@ -302,7 +348,9 @@ void mtsGalilController::Close()
         SendCommandString("ST");
         DisableAllMotorPower();
         GClose(m_Galil);
-        delete m_Galil;
+        // PK: I do not think it is necessary or correct to delete m_Galil
+        //     you could set it to nullptr if you want
+        // delete m_Galil;
     }
 }
 
@@ -319,10 +367,19 @@ void mtsGalilController::ConnectToGalilController(const std::string &deviceName)
     {
         std::cout << "Hello Galil" << std::endl;
 
-        GOpen(deviceName.c_str(), &m_Galil);
+        // -d for direct connection (not using gcaps)
+        std::string GalilString = std::string("-d ") + deviceName;
+        GReturn ret = GOpen(GalilString.c_str(), &m_Galil);
+        if (ret != G_NO_ERROR) {
+            CMN_LOG_CLASS_INIT_ERROR << "Galil GOpen: error opening " << deviceName
+                                     << ": " << ret << std::endl;
+            return;
+        }
+        std::cout << "Galil connected!" << std::endl;
 
         // Stop motors and halt Galil Controller program execution
-        this->StopMotionAll();
+        // PK: Following does not seem to work
+        // this->StopMotionAll();
 
         m_ServoLoopTime = this->SendCommandDouble("TM?");
         // Loop time is used to correct for speed scaling due to TM250
@@ -330,32 +387,28 @@ void mtsGalilController::ConnectToGalilController(const std::string &deviceName)
 
         CMN_LOG_CLASS_INIT_VERBOSE << "Galil Servo Loop Time is " << m_ServoLoopTime / 1000.0 << " ms" << std::endl;
     }
-    catch (std::string e) // error
+    catch (const std::string &e) // error
     {
         CMN_LOG_CLASS_INIT_ERROR << e << std::endl;
         if (std::string::npos != e.find("COMMAND ERROR"))
             CMN_LOG_CLASS_INIT_ERROR << "a command error occurred" << std::endl; // special processing for command errors
-
-        return;
     }
-    catch (std::runtime_error e) // error
+    catch (const std::runtime_error &e) // error
     {
         CMN_LOG_CLASS_RUN_ERROR << e.what() << std::endl;
-        return;
     }
-    return;
 }
 
 // EnableMotorPower:  turns on the motor servos
 void mtsGalilController::EnableAllMotorPower()
 {
     CMN_LOG_CLASS_RUN_VERBOSE << "EnableMotorPower " << std::endl;
-    //	VerifyStatus("EnableMotorPower", ESTOP_MASK);
+    // VerifyStatus("EnableMotorPower", ESTOP_MASK);
     try
     {
         this->SendCommandString("SH");
     }
-    catch (std::string e)
+    catch (const std::string &e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Enable motor failed  \"" << e << "\"" << std::endl;
         cmnThrow(std::runtime_error("Enable motor failed "));
@@ -372,14 +425,14 @@ void mtsGalilController::DisableAllMotorPower()
         this->StopMotionAll();
         SendCommandString("MO");
     }
-    catch (std::string e)
+    catch (const std::string &e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Disable motor failed  \"" << e << "\"" << std::endl;
         cmnThrow(std::runtime_error("Disable motor failed "));
     }
 }
 
-void mtsGalilController::EnableMotorPower(const mtsBoolVec &mask)
+void mtsGalilController::EnableMotorPower(const vctBoolVec &mask)
 {
     CMN_LOG_CLASS_RUN_VERBOSE << "EnableMotorPower \"" << mask << "\"" << std::endl;
     try
@@ -388,7 +441,7 @@ void mtsGalilController::EnableMotorPower(const mtsBoolVec &mask)
         CreateCommandForAxis(buffer, "SH", mask);
         SendCommandString(buffer);
     }
-    catch (std::string e)
+    catch (const std::string &e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Enable motor failed  \"" << e << "\"" << std::endl;
         cmnThrow(std::runtime_error("Enable motor failed "));
@@ -396,17 +449,17 @@ void mtsGalilController::EnableMotorPower(const mtsBoolVec &mask)
 }
 
 // MO not valid while running, need to issue ST first!!!! annoying.
-void mtsGalilController::DisableMotorPower(const mtsBoolVec &mask)
+void mtsGalilController::DisableMotorPower(const vctBoolVec &mask)
 {
     CMN_LOG_CLASS_RUN_VERBOSE << "DisableMotorPower \"" << mask << "\"" << std::endl;
-        try
+    try
     {
         StopMotion(mask);
         char buffer[G_SMALL_BUFFER];
         CreateCommandForAxis(buffer, "MO", mask);
         SendCommandString(buffer);
     }
-    catch (std::string e)
+    catch (const std::string &e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Disable motor Failed  \"" << e << "\"" << std::endl;
         cmnThrow(std::runtime_error("Disable motor Failed "));
@@ -419,21 +472,21 @@ void mtsGalilController::StopMotionAll()
     try
     {
         CMN_LOG_CLASS_RUN_VERBOSE << "Stop ALL" << std::endl;
-        mtsBoolVec all(GetNumberActuators());
+        vctBoolVec all(GetNumberActuators());
         all.SetAll(true);
         StopMotion(all);
     }
-    catch (std::string e)
+    catch (const std::string &e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Stop Motion failed  \"" << e << "\"" << std::endl;
         cmnThrow(std::runtime_error("Stop Motion error "));
     }
 }
 
-void mtsGalilController::StopMotion(const mtsBoolVec &mask)
+void mtsGalilController::StopMotion(const vctBoolVec &mask)
 {
     CMN_LOG_CLASS_RUN_VERBOSE << "Stop \"" << mask << "\"" << std::endl;
-    
+
     try
     {
         if (mask.Equal(false))
@@ -448,7 +501,7 @@ void mtsGalilController::StopMotion(const mtsBoolVec &mask)
             SendCommandString(buffer);
         }
     }
-    catch (std::string e)
+    catch (const std::string &e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Stop Motion failed  \"" << e << "\"" << std::endl;
         cmnThrow(std::runtime_error("Stop Motion  error "));
@@ -457,11 +510,11 @@ void mtsGalilController::StopMotion(const mtsBoolVec &mask)
 
 // this is a bit tricky. the settings in the config file determine in which
 // direction the homing procedure will start.
-// last known velocity will be used for homeing.
+// last known velocity will be used for homing.
 // THIS IS A BLOCKING COMMAND!!!!!!!!
 // Start homing with the stage to the negative side of the home switch
 
-void mtsGalilController::Home(const mtsBoolVec &mask)
+void mtsGalilController::Home(const vctBoolVec &mask)
 {
     CMN_LOG_CLASS_RUN_VERBOSE << "Homing \"" << mask << "\"" << std::endl;
 
@@ -482,7 +535,7 @@ void mtsGalilController::Home(const mtsBoolVec &mask)
         WaitMotion(mask, 60);
 
         // if home is found, lets save the status in a variable.
-        mtsDoubleVec homeValue;
+        vctDoubleVec homeValue;
         homeValue.SetSize(mask.size());
         homeValue.SetAll(1);
 
@@ -490,17 +543,12 @@ void mtsGalilController::Home(const mtsBoolVec &mask)
         SendCommandString(buffer);
     }
 
-    catch (std::runtime_error e)
+    catch (const std::runtime_error &e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Homing failed: Error  \"" << e.what() << "\"" << std::endl;
         cmnThrow(std::runtime_error("Homing error "));
     }
-    catch (std::runtime_error e)
-    {
-        CMN_LOG_CLASS_RUN_ERROR << "Homing failed: Error  \"" << e.what() << "\"" << std::endl;
-        cmnThrow(std::runtime_error("Homing error "));
-    }
-    catch (std::string e)
+    catch (const std::string &e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Homing failed: Error  \"" << e << "\"" << std::endl;
         cmnThrow(std::runtime_error("Homing error "));
@@ -508,12 +556,12 @@ void mtsGalilController::Home(const mtsBoolVec &mask)
 }
 
 // UnHome:  Unhome the robot.  Besides clearing the IsHomed flag, this function turns off the forward and reverse
-//          software travel limits i.e sets them to +/- 100mm
-void mtsGalilController::UnHome(const mtsBoolVec &mask)
+//          software travel limits, i.e., sets them to +/- 100mm
+void mtsGalilController::UnHome(const vctBoolVec &mask)
 {
     CMN_LOG_CLASS_RUN_VERBOSE << "UnHoming \"" << mask << "\"" << std::endl;
 
-    mtsDoubleVec homeValue;
+    vctDoubleVec homeValue;
     homeValue.SetSize(mask.size());
     homeValue.SetAll(0);
 
@@ -523,7 +571,7 @@ void mtsGalilController::UnHome(const mtsBoolVec &mask)
         CreateCommand(buffer, "ZA", mask, homeValue);
         SendCommandString(buffer);
     }
-    catch (std::string e)
+    catch (const std::string &e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "UnHoming failed: Error  \"" << e << "\"" << std::endl;
         cmnThrow(std::runtime_error("UnHoming error "));
@@ -532,11 +580,9 @@ void mtsGalilController::UnHome(const mtsBoolVec &mask)
 
 void mtsGalilController::GetActuatorState(prmActuatorState &state)
 {
-    // InMotion returns the motion profile finished, typically there is some histersis in the control
+    // InMotion returns the motion profile finished, typically there is some hysteresis in the control
     // algorithm, so the profile finishes assuming perfect tracking, and the servo loop tries to
     // catch up.
-    state.SetSize(GetNumberActuators());
-
     state.InMotion().Zeros();
     state.MotorOff().Zeros();
     state.SoftFwdLimitHit().Zeros();
@@ -554,7 +600,7 @@ void mtsGalilController::GetActuatorState(prmActuatorState &state)
         m_DecPosition = 0;
         for (unsigned int i = 0; i < m_NumberEncoderPins; i++)
         {
-            m_DigitalInput[i] = this->SendCommandInt("MG_" + DI[i]);
+            m_DigitalInput[i] = this->SendCommandInt("MG " + DI[i]);
             m_DigitalInput[i] = !m_DigitalInput[i];
 
             m_DecPosition += m_DigitalInput[i] * pow(2, (9 - i));
@@ -572,51 +618,51 @@ void mtsGalilController::GetActuatorState(prmActuatorState &state)
         for (unsigned int i = 0; i < GetNumberActuators(); i++)
         {
             // the encoders are in long
-            state.Position()[i] = (long)this->SendCommandInt("MG_" + TP[i]);
+            state.Position()[i] = (long)this->SendCommandInt("MG " + TP[i]);
 
-            // In the new version: This only applies to setting values ,eg sp.
+            // In the new version: This only applies to setting values, e.g., sp.
             // velocity still returns the actual Velocity * (TM/1000) so multiply it by 1000/tm
             // The TV command is computed using a special averaging filter (over approximately 0.25 sec for
             // TM1000). Therefore, TV will return average velocity, not instantaneous velocity.
             // this might be different for TMi250, not sure what the value will be
             // it might be 1/4 of actual velocity due to faster sampling
 
-            state.Velocity()[i] = this->SendCommandDouble("MG_" + TV[i]) * m_TMVelocityMultiplier;
+            state.Velocity()[i] = this->SendCommandDouble("MG " + TV[i]) * m_TMVelocityMultiplier;
 
             // analog inputs are not part of the actuator state??
-            m_AnalogInput[i] = this->SendCommandDouble("MG_" + AN[i]);
+            m_AnalogInput[i] = this->SendCommandDouble("MG " + AN[i]);
 
             // be careful, this is a motion profile variable not actual motion (there is a lag where the servo loop
             // catches up to the profile position)
             //  state.Velocity()[i]=(galil->sourceValue(m_data, TV[i]));
-            if (this->SendCommandDouble("MG _" + BG[i]) != 0.0)
+            if (this->SendCommandDouble("MG " + BG[i]) != 0.0)
             {
                 state.InMotion()[i] = true;
             }
 
             // motor off
-            if (this->SendCommandDouble("MG _" + MO[i]) != 0.0)
+            if (this->SendCommandDouble("MG " + MO[i]) != 0.0)
             {
                 state.MotorOff()[i] = true;
             }
 
-            if (this->SendCommandDouble("MG _" + ZA[i]) != 0.0)
+            if (this->SendCommandDouble("MG " + ZA[i]) != 0.0)
             {
                 state.IsHomed()[i] = true;
             }
 
             // TODO: double check the active ihigh/low configuration
             // here we assume that homeCFG=-1
-            if (this->SendCommandDouble("MG _" + HM[i]) != 0.0)
+            if (this->SendCommandDouble("MG " + HM[i]) != 0.0)
                 state.HomeSwitchOn()[i] = true;
 
             // Decelerating or stopped by FWD limit switch OR soft limit FL
-            if (this->SendCommandDouble("MG _" + SC[i]) == 2)
+            if (this->SendCommandDouble("MG " + SC[i]) == 2)
             {
                 state.SoftFwdLimitHit()[i] = true;
                 m_SoftFwdLimitHit = true;
             }
-            if (this->SendCommandDouble("MG _" + SC[i]) == 3)
+            if (this->SendCommandDouble("MG " + SC[i]) == 3)
             {
                 state.SoftRevLimitHit()[i] = true;
                 m_SoftRevLimitHit = true;
@@ -641,18 +687,18 @@ void mtsGalilController::GetActuatorState(prmActuatorState &state)
 
             // TODO: check, this might be differnt for CN-1, or CN1
 
-            if (this->SendCommandDouble("MG _" + LF[i]) == 0)
+            if (this->SendCommandDouble("MG " + LF[i]) == 0)
             {
                 state.HardFwdLimitHit()[i] = true;
             }
 
-            if (this->SendCommandDouble("MG _" + LR[i]) == 0)
+            if (this->SendCommandDouble("MG " + LR[i]) == 0)
             {
                 state.HardFwdLimitHit()[i] = true;
             }
 
             // user variable used to store state of home
-            if (this->SendCommandDouble("MG _" + ZA[i]) == 1)
+            if (this->SendCommandDouble("MG " + ZA[i]) == 1)
             {
                 state.IsHomed()[i] = true;
             }
@@ -678,7 +724,7 @@ void mtsGalilController::GetActuatorState(prmActuatorState &state)
         // the update rate (TM command) will actually set an update rate of 976 microseconds. Thus the
         // value returned by the TIME operand will be off by 2.4% of the actual time.
 
-        state.Timestamp() = this->SendCommandDouble("TIME");
+        state.Timestamp() = this->SendCommandDouble("MG TIME");
 
         // TC is the error code;
         // 1 Unrecognized command 56 Array index invalid or out of range
@@ -709,7 +755,7 @@ void mtsGalilController::GetActuatorState(prmActuatorState &state)
         // 21 Begin not valid while running 100 Not valid when running ECAM
         // 22 Begin not possible due to Limit Switch 101 Improper index into ET (must be 0-256)
     }
-    catch (std::string e)
+    catch (const std::string &e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "GetActuatorState: Error  \"" << e << "\"" << std::endl;
         cmnThrow(std::runtime_error("GetActuatorState: Error "));
@@ -720,7 +766,7 @@ void mtsGalilController::GetActuatorState(prmActuatorState &state)
     state.Velocity() = ConvertEncoderCountsToAxisUnit(state.Velocity());
 }
 
-void mtsGalilController::GetAnalogInputs(mtsDoubleVec &ain) const
+void mtsGalilController::GetAnalogInputs(vctDoubleVec &ain) const
 {
 
     if (ain.size() == m_AnalogInput.size())
@@ -735,17 +781,16 @@ void mtsGalilController::GetAnalogInputs(mtsDoubleVec &ain) const
 }
 
 // Disha-encoder
-void mtsGalilController::GetToolZEncoder(mtsInt &toolZencoder) const
+void mtsGalilController::GetToolZEncoder(int &toolZencoder) const
 {
-
     toolZencoder = m_DecPosition;
 }
 
-// The expected  values are in counts.
+// The expected values are in counts.
 // Set the desired motion goals.
 // this sets the desired actuator goal, also sets the velocity
 // in PT - POSITION TRACKING MODE (PT1,1..) SP, AC, DC commands are allowed while the robot is moving.
-// If in a differnet mode, ST (stop) command has to be called first.
+// If in a different mode, ST (stop) command has to be called first.
 void mtsGalilController::SetPositionMove(const prmMaskedDoubleVec &goalPosition)
 {
     CMN_LOG_CLASS_RUN_VERBOSE << "SetPositionMove \"" << goalPosition << "\"" << std::endl;
@@ -759,7 +804,7 @@ void mtsGalilController::SetPositionMove(const prmMaskedDoubleVec &goalPosition)
     // if in jog mode then PT will shut it off and turn position tracking without BGA
     prmMaskedDoubleVec goalPositionEnc = ConvertAxisUnitToEncoderCounts(goalPosition);
     char buffer[G_SMALL_BUFFER];
-    // createa  command that will print PT1,,1,,,, etc.
+    // create a command that will print PT1,,1,,,, etc.
     prmMaskedDoubleVec cmdPT(goalPosition.Mask().size());
     cmdPT.Data().SetAll(1);
     CreateCommandLong(buffer, "PT", goalPosition.Mask(), cmdPT.Data());
@@ -803,8 +848,7 @@ void mtsGalilController::SetVelocityMove(const prmMaskedDoubleVec &goalVelocity)
 
     // Note when a soft limit switch is hit, it takes two ms to notice, so if we constantly call BG then the profile is started from scratch
     //  and the soft limit is only check on the following loop cycle in the galil controller.
-    // so try to avoid callign BG after JG
-
+    // so try to avoid calling BG after JG
     // just in case they are not moving.
     vctBoolVec startJogMask(goalVelocityEnc.Mask());
 
@@ -823,8 +867,8 @@ void mtsGalilController::SetVelocityMove(const prmMaskedDoubleVec &goalVelocity)
     SendCommandString(buffer);
 };
 
-// Note : while the robot is moving we can not change the acceleration or decelaration.
-// this sets the velocity rather then position
+// Note: while the robot is moving we cannot change the acceleration or deceleration.
+// this sets the velocity rather than position
 void mtsGalilController::SetSpeed(const prmMaskedDoubleVec &speed)
 {
     CMN_LOG_CLASS_RUN_VERBOSE << "Setting velocity \"" << speed << "\"" << std::endl;
@@ -865,7 +909,7 @@ void mtsGalilController::SetAbsolutePosition(const prmMaskedDoubleVec &position)
     SendCommandString(buffer);
 }
 
-void mtsGalilController::StopMovement(const mtsBoolVec &mask, double timeout)
+void mtsGalilController::StopMovement(const vctBoolVec &mask, double timeout)
 {
     osaStopwatch timer;
     timer.Reset();
@@ -886,7 +930,7 @@ void mtsGalilController::StopMovement(const mtsBoolVec &mask, double timeout)
     {
         this->WaitMotion(mask, timeout);
     }
-    catch (std::runtime_error e)
+    catch (const std::runtime_error &e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Stop movement failed: " << e.what() << std::endl;
         cmnThrow(std::runtime_error(std::string("Stop movement failed with error") + e.what()));
@@ -896,7 +940,7 @@ void mtsGalilController::StopMovement(const mtsBoolVec &mask, double timeout)
 // WaitMotion:  Wait for the robot to stop the current motion
 // waits for the specified axes
 // specified timeout in seconds
-void mtsGalilController::WaitMotion(const mtsBoolVec &mask, double timeout)
+void mtsGalilController::WaitMotion(const vctBoolVec &mask, double timeout)
 {
     osaStopwatch timer;
     timer.Reset();
@@ -928,7 +972,7 @@ void mtsGalilController::WaitMotion(const mtsBoolVec &mask, double timeout)
         if (timer.GetElapsedTime() > timeout)
             cmnThrow(std::runtime_error(std::string("Timeout reached:")));
     }
-    catch (std::string e)
+    catch (const std::string &e)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Wait for Motion failed: " << e << std::endl;
         cmnThrow(std::runtime_error(std::string("Wait for motion error") + e));
@@ -936,27 +980,23 @@ void mtsGalilController::WaitMotion(const mtsBoolVec &mask, double timeout)
 }
 
 // SendCommand:  send a command to the Galil controller.
-// Returns ref to the static buffer for the response message.
+// Returns response string.
 std::string mtsGalilController::SendCommandString(const std::string &cmd)
 {
-    GCStringOut response;
     if (!m_Galil)
     {
-
         cmnThrow(std::runtime_error("SendCommandString: ( No Controller Handle = Not Connected )"));
         return " ";
     }
     CMN_LOG_CLASS_RUN_DEBUG << "Sending to Galil [" << cmd << "]" << std::endl;
 
-    GCStringOut buffer;
+    char response[G_SMALL_BUFFER];
     try
     {
         CheckErrorGCommand(
-            GCmdT(m_Galil, cmd.c_str(), buffer, G_SMALL_BUFFER, NULL));
-
-        response = BufferToGCStringOut(buffer, G_SMALL_BUFFER);
+            GCmdT(m_Galil, cmd.c_str(), response, G_SMALL_BUFFER, NULL));
     }
-    catch (GReturn rc)
+    catch (const GReturn &rc)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Error for command \\" << cmd << "\\" << std::endl;
         CMN_LOG_CLASS_RUN_ERROR << "Galil error code: " << rc << std::endl;
@@ -984,7 +1024,6 @@ int mtsGalilController::SendCommandInt(const std::string &cmd)
     int response;
     if (!m_Galil)
     {
-
         cmnThrow(std::runtime_error("SendCommandInt: ( No Controller Handle = Not Connected )"));
     }
     CMN_LOG_CLASS_RUN_DEBUG << "Sending to Galil [" << cmd << "]" << std::endl;
@@ -994,11 +1033,11 @@ int mtsGalilController::SendCommandInt(const std::string &cmd)
         CheckErrorGCommand(
             GCmdI(m_Galil, cmd.c_str(), &response));
     }
-    catch (GReturn rc)
+    catch (const GReturn &rc)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Error for command \\" << cmd << "\\" << std::endl;
         CMN_LOG_CLASS_RUN_ERROR << "Galil error code: " << rc << std::endl;
-        cmnThrow(std::runtime_error(std::string("SendCommand:  Error sending command--") + std::to_string(rc)), CMN_LOG_LOD_RUN_ERROR);
+        cmnThrow(std::runtime_error(std::string("SendCommandInt:  Error sending command--") + std::to_string(rc)), CMN_LOG_LOD_RUN_ERROR);
 
         //  int t = atoi( (e.substr(0,1)).c_str() ); // get int for type, first digit of code
         //  int f = atoi( (e.substr(1,2)).c_str() ); // int for function, middle two digits of code
@@ -1023,8 +1062,7 @@ double mtsGalilController::SendCommandDouble(const std::string &cmd)
     double response;
     if (!m_Galil)
     {
-
-        cmnThrow(std::runtime_error("SendCommandInt: ( No Controller Handle = Not Connected )"));
+        cmnThrow(std::runtime_error("SendCommandDouble: ( No Controller Handle = Not Connected )"));
     }
     CMN_LOG_CLASS_RUN_DEBUG << "Sending to Galil [" << cmd << "]" << std::endl;
 
@@ -1033,11 +1071,11 @@ double mtsGalilController::SendCommandDouble(const std::string &cmd)
         CheckErrorGCommand(
             GCmdD(m_Galil, cmd.c_str(), &response));
     }
-    catch (GReturn rc)
+    catch (const GReturn &rc)
     {
         CMN_LOG_CLASS_RUN_ERROR << "Error for command \\" << cmd << "\\" << std::endl;
         CMN_LOG_CLASS_RUN_ERROR << "Galil error code: " << rc << std::endl;
-        cmnThrow(std::runtime_error(std::string("SendCommand:  Error sending command--") + std::to_string(rc)), CMN_LOG_LOD_RUN_ERROR);
+        cmnThrow(std::runtime_error(std::string("SendCommandDouble:  Error sending command--") + std::to_string(rc)), CMN_LOG_LOD_RUN_ERROR);
 
         //  int t = atoi( (e.substr(0,1)).c_str() ); // get int for type, first digit of code
         //  int f = atoi( (e.substr(1,2)).c_str() ); // int for function, middle two digits of code
@@ -1063,7 +1101,6 @@ void mtsGalilController::CreateCommand(char *buffer,
                                              const vctBoolVec &mask,
                                              const vctDoubleVec &cmdParam)
 {
-
     long bufpos;
     bufpos = sprintf(buffer, "%s", galilCmd);
 
@@ -1091,7 +1128,6 @@ void mtsGalilController::CreateCommandLong(char *buffer,
                                                  const vctBoolVec &mask,
                                                  const vctDoubleVec &cmdParam)
 {
-
     long bufpos;
     bufpos = sprintf(buffer, "%s", galilCmd);
     unsigned int ii;
@@ -1295,4 +1331,5 @@ vctBoolVec mtsGalilController::RemapAxisMask(const vctBoolVec& axisMask)
 
         galilMask[idxGalil] = axisMask[idxGalil];
     }
+    return galilMask;   // PK TODO: Added to compile
 }

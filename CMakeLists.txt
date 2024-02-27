@@ -1,5 +1,5 @@
 #
-# (C) Copyright 2016-2023 Johns Hopkins University (JHU), All Rights Reserved.
+# (C) Copyright 2016-2024 Johns Hopkins University (JHU), All Rights Reserved.
 #
 # --- begin cisst license - do not edit ---
 #
@@ -10,9 +10,9 @@
 # --- end cisst license ---
 
 cmake_minimum_required (VERSION 3.10)
-project (mts_galil_controller VERSION 0.0.0)
+project (sawGalilController VERSION 0.1.0)
 
-include_directories (include)
+set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 add_subdirectory (share)
 
@@ -27,31 +27,30 @@ set (REQUIRED_CISST_LIBRARIES
 
 find_package (cisst 1.2.0 REQUIRED ${REQUIRED_CISST_LIBRARIES})
 
-set( catkin_REQUIRED_COMPONENTS 
-    roscpp
-    rospy
-    std_msgs
-    geometry_msgs
-    cisst_msgs
-    cisst_ros_bridge
-)
+# Find Galil gclib
+find_package (gclib REQUIRED)
 
-find_package(catkin REQUIRED COMPONENTS
-    ${catkin_REQUIRED_COMPONENTS}
-)
-include_directories(${catkin_INCLUDE_DIRS})
-catkin_package(
-    INCLUDE_DIRS include
-    LIBRARIES mtsGalilController
-    CATKIN_DEPENDS ${catkin_REQUIRED_COMPONENTS}
-)
+include_directories (${gclib_INCLUDE_DIR})
+link_directories (${gclib_LIBRARY_DIR})
 
-set ( mtsGalilController_HEADER_FILES
-    include/mtsGalilController/mtsGalilController.h
-)
-set ( mtsGalilController_SOURCE_FILES
-    code/mtsGalilController.cpp
-)
+set (catkin_REQUIRED_COMPONENTS
+     roscpp
+     rospy
+     std_msgs
+     geometry_msgs
+     cisst_msgs
+     cisst_ros_bridge)
+
+find_package(catkin COMPONENTS ${catkin_REQUIRED_COMPONENTS})
+
+if (catkin_FOUND)
+    include_directories(${catkin_INCLUDE_DIRS})
+
+    catkin_package(
+        INCLUDE_DIRS include
+        LIBRARIES sawGalilController
+        CATKIN_DEPENDS ${catkin_REQUIRED_COMPONENTS})
+endif ()
 
 if (cisst_FOUND_AS_REQUIRED)
 
@@ -59,65 +58,83 @@ if (cisst_FOUND_AS_REQUIRED)
     include (${CISST_USE_FILE})
 
     if (NOT CISST_HAS_JSON)
-        message( FATAL_ERROR "mtsGalilController requires cisst to be built with JSON" )
+        message( FATAL_ERROR "sawGalilController requires cisst to be built with JSON" )
     endif ()
 
+    # Default library path
+    set (LIBRARY_OUTPUT_PATH "${sawGalilController_BINARY_DIR}/lib")
     # catkin/ROS paths
     cisst_set_output_path ()
-    catkin_package(
-        LIBRARIES mtsGalilController
-        INCLUDE_DIRS include
-        CATKIN_DEPENDS ${catkin_REQUIRED_COMPONENTS}
-    )
 
-    # add all config files for this component
-    cisst_add_config_files (mtsGalilController)
+    set (sawGalilController_INCLUDE_DIR "${sawGalilController_SOURCE_DIR}/include")
+    include_directories (${sawGalilController_INCLUDE_DIR})
+    set (sawGalilController_LIBRARY_DIR "${LIBRARY_OUTPUT_PATH}")
+    set (sawGalilController_LIBRARIES sawGalilController)
+
+    if (catkin_FOUND)
+        catkin_package(
+            LIBRARIES sawGalilController
+            INCLUDE_DIRS include
+            CATKIN_DEPENDS ${catkin_REQUIRED_COMPONENTS}
+        )
+    endif ()
     
-    add_library (mtsGalilController 
-        ${mtsGalilController_SOURCE_FILES}
-    )
+    set (sawGalilController_HEADER_FILES
+         "${sawGalilController_INCLUDE_DIR}/sawGalilController/mtsGalilController.h"
+         "${sawGalilController_INCLUDE_DIR}/sawGalilController/mtsGalilControllerDR.h"
+         "${sawGalilController_INCLUDE_DIR}/sawGalilController/sawGalilControllerExport.h")
+    set (sawGalilController_SOURCE_FILES
+         code/mtsGalilController.cpp
+         code/mtsGalilControllerDR.cpp)
+
+   # add all config files for this component
+   cisst_add_config_files (sawGalilController)
+
+   add_library (sawGalilController ${IS_SHARED}
+                ${sawGalilController_HEADER_FILES}
+                ${sawGalilController_SOURCE_FILES})
     
-    cisst_target_link_libraries (mtsGalilController ${REQUIRED_CISST_LIBRARIES})
+    cisst_target_link_libraries (sawGalilController ${REQUIRED_CISST_LIBRARIES})
     
-    set_target_properties (mtsGalilController PROPERTIES
-        VERSION ${mts_galil_controller_VERSION}
-        FOLDER "mtsGalilController"
-        PUBLIC_HEADER "${mtsGalilController_HEADER_FILES}"
-    )
-    target_include_directories(mtsGalilController PUBLIC 
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-    )
-    target_link_libraries (mtsGalilController
-        ${catkin_LIBRARIES}
-        -lgclib
-        -lgclibo                  
-    )
+    set_target_properties (sawGalilController PROPERTIES
+        VERSION ${sawGalilController_VERSION}
+        FOLDER "sawGalilController"
+        PUBLIC_HEADER "${sawGalilController_HEADER_FILES}")
+
+    target_include_directories(sawGalilController PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+    target_link_libraries (sawGalilController ${gclib_LIBRARIES})
 
     # Install target for headers and library
     install (
-        DIRECTORY "${mts_galil_controller_SOURCE_DIR}/include/mtsGalilController"
+        DIRECTORY "${sawGalilController_SOURCE_DIR}/include/sawGalilController"
         DESTINATION include
-        COMPONENT mtsGalilController-dev
+        COMPONENT sawGalilController-dev
         PATTERN .svn EXCLUDE
     )
 
     install (
-        TARGETS mtsGalilController 
-        COMPONENT mtsGalilController
+        TARGETS sawGalilController 
+        COMPONENT sawGalilController
             RUNTIME DESTINATION bin
             LIBRARY DESTINATION lib
             ARCHIVE DESTINATION lib
     )
 
-    install(TARGETS mtsGalilController
-        ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-        LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-        RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-    )
+    if (catkin_FOUND)
+        install(TARGETS sawGalilController
+            ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+            LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+            RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+        )
 
-    install(DIRECTORY include/mtsGalilController/
-        DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
-    )
+        install(DIRECTORY include/sawGalilController/
+            DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+        )
+    endif ()
+
+    add_subdirectory (examples)
 
 else (cisst_FOUND_AS_REQUIRED)
     message ("Information: code in ${CMAKE_CURRENT_SOURCE_DIR} will not be compiled, it requires ${REQUIRED_CISST_LIBRARIES}")

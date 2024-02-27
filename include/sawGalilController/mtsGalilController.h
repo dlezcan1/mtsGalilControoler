@@ -1,18 +1,38 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-    */
+/* ex: set filetype=cpp softtabstop=4 shiftwidth=4 tabstop=4 cindent expandtab: */
+
+/*
+  (C) Copyright 2024 Johns Hopkins University (JHU), All Rights Reserved.
+
+--- begin cisst license - do not edit ---
+
+This software is provided "as is" under an open source license, with
+no warranty.  The complete license can be found in license.txt and
+http://www.cisst.org/cisst/license.txt.
+
+--- end cisst license ---
+*/
+
 #ifndef _mtsGalilContoller_h
 #define _mtsGalilContoller_h
 
-#include <memory>
+#include <string>
+#include <vector>
 
 #include <gclib.h>
 #include <gclibo.h>
 
+#include <cisstVector/vctDynamicVectorTypes.h>
 #include <cisstParameterTypes/prmActuatorState.h>
 #include <cisstParameterTypes/prmMaskedVector.h>
-#include <cisstMultiTask.h>
+#include <cisstMultiTask/mtsTaskPeriodic.h>
+
+// Always include last
+#include <sawGalilController/sawGalilControllerExport.h>
 
 class CISST_EXPORT mtsGalilController : public mtsTaskPeriodic
 {
-    CMN_DECLARE_SERVICES(CMN_NO_DYNAMIC_CREATION, CMN_LOG_LOD_RUN_ERROR);
+    CMN_DECLARE_SERVICES(CMN_DYNAMIC_CREATION_ONEARG, CMN_LOG_LOD_RUN_ERROR)
 
 public:
     mtsGalilController(const std::string &componentName, double period_secs);
@@ -27,10 +47,12 @@ public:
     void Cleanup(void) override;
 
     // Galil Controller Functions
-    void SetTimeout(const mtsDouble &timeout, mtsBool &success);
+    void GetConnected(bool &val) const { val = (m_Galil != 0); }
 
-    inline void WaitMotion(const mtsBoolVec &mask) { WaitMotion(mask, m_timeout); }
-    inline void StopMovement(const mtsBoolVec &mask) { StopMovement(mask, m_timeout); }
+    void SetTimeout(const double &timeout, bool &success);
+
+    inline void WaitMotion(const vctBoolVec &mask) { WaitMotion(mask, m_timeout); }
+    inline void StopMovement(const vctBoolVec &mask) { StopMovement(mask, m_timeout); }
 
     // Initialize (e.g., establish communications with the controller)
     // and configure the robot.  Note that a configuration file name could
@@ -42,18 +64,18 @@ public:
     void DisableAllMotorPower();
 
     // specify the axes.
-    void EnableMotorPower(const mtsBoolVec &mask);
+    void EnableMotorPower(const vctBoolVec &mask);
     // turn power off to the motors, run stopmotion command first just in case
     // otherwise it is not possible to turn off motors when running?
-    void DisableMotorPower(const mtsBoolVec &mask);
+    void DisableMotorPower(const vctBoolVec &mask);
 
     // Stop robot motion (do not disable motor power)
     void StopMotionAll();
-    void StopMotion(const mtsBoolVec &mask);
+    void StopMotion(const vctBoolVec &mask);
 
     // the mask is used as command mask, where bool=true homes that axes in the vector
-    void Home(const mtsBoolVec &mask);
-    void UnHome(const mtsBoolVec &mask);
+    void Home(const vctBoolVec &mask);
+    void UnHome(const vctBoolVec &mask);
 
     // Abort robot command
     void AbortProgram();
@@ -71,9 +93,9 @@ public:
     //     in counts/sec**2
     void GetActuatorState(prmActuatorState &state);
 
-    void GetAnalogInputs(mtsDoubleVec &ain) const;
+    void GetAnalogInputs(vctDoubleVec &ain) const;
     // Disha-encoder
-    void GetToolZEncoder(mtsInt &toolZencoder) const;
+    void GetToolZEncoder(int &toolZencoder) const;
 
     // The expected  values are in counts.
     // Set the desired motion goals.
@@ -97,13 +119,14 @@ public:
 
     //*** Other functions:
     // Wait for all motion to be complete, with a timeout in seconds.
-    void StopMovement(const mtsBoolVec &mask, double timeout = 60);
+    void StopMovement(const vctBoolVec &mask, double timeout = 60);
     // Wait for all motion to be complete, with a timeout in seconds.
-    void WaitMotion(const mtsBoolVec &mask, double timeout = 60);
+    void WaitMotion(const vctBoolVec &mask, double timeout = 60);
 
     //*** Low-level functions that have been made public for use with the IRE:
     // Send command to Galil controller and return pointer to response buffer.
-    inline void SendCommand(const mtsStdString& cmd) { SendCommandString(cmd.Data); }
+    inline void SendCommand(const std::string& cmd) { SendCommandString(cmd); }
+    inline void SendCommandRet(const std::string& cmd, std::string &ret) { ret = SendCommandString(cmd); }
     std::string SendCommandString(const std::string& cmd);
     /* Sends a command knowing that the return value will be a int */
     int         SendCommandInt(const std::string& cmd);
@@ -120,8 +143,8 @@ public:
     };
 
     // change the pid parameters by loading different
-    void GetMotionMode(mtsUInt &mode) const { mode = m_MotionMode; }
-    void SetMotionMode(const mtsUInt &mode) { m_MotionMode = mode; }
+    void GetMotionMode(unsigned int &mode) const { mode = m_MotionMode; }
+    void SetMotionMode(const unsigned int &mode) { m_MotionMode = mode; }
 
     // Method to record values via QR/DR packets
     enum DataRecordMethod
@@ -131,8 +154,8 @@ public:
     };
     GDataRecord RecordData(const DataRecordMethod &method = DataRecordMethod::QR);
 
-    mtsDoubleVec GetEncoderCountConversionFactors() const { return m_EncoderCountsPerUnit; }
-    void SetEncoderCountConversionFactors(const mtsDoubleVec &conversionFactors)
+    vctDoubleVec GetEncoderCountConversionFactors() const { return m_EncoderCountsPerUnit; }
+    void SetEncoderCountConversionFactors(const vctDoubleVec &conversionFactors)
     {
         assert(conversionFactors.size() == m_EncoderCountsPerUnit.size());
         m_EncoderCountsPerUnit = conversionFactors;
@@ -198,7 +221,6 @@ protected:
     // Disha-encoder
     std::vector<std::string> DI;
 
-
     // Component fields
     mtsStateTable m_StateTable;
     prmActuatorState m_ActuatorState;
@@ -206,15 +228,14 @@ protected:
     float m_timeout = 60.0 * cmn_s;
 
 private:
-    static inline void CheckErrorGCommand(GReturn rc) throw(GReturn) { if (rc != G_NO_ERROR) throw rc; } 
-    static GCStringOut BufferToGCStringOut(char* buffer, unsigned int buffer_size);
+    static inline void CheckErrorGCommand(GReturn rc) { if (rc != G_NO_ERROR) throw rc; }
 
     void ConnectToGalilController(const std::string& deviceName);
 
-    //////-----	Motion commands   -----//////
+    //////----- Motion commands   -----//////
     //  (all positions are in COUNTS and are relative to the ACTUATOR HOME position).
     // All the mtsVectors are going to be the size of the MAX_
-    vctBoolVec	 m_IsHomed;  // TRUE if actuator IsHomed
+    vctBoolVec   m_IsHomed;  // TRUE if actuator IsHomed
     vctDoubleVec m_AnalogInput;
 
     // Disha-encoder
@@ -227,20 +248,23 @@ private:
 
     // galil controller class handle
     GCon         m_Galil;
-    mtsStdString m_DeviceName;
-    
+    std::string  m_DeviceName;
+
+    // DMC program to download to Galil on startup
+    std::string   mDmcFile;
+
     // internal variable used to calculate velocity times.
     double            m_ServoLoopTime;
     double            m_TMVelocityMultiplier;
     GDataRecord       m_dataRecord;
-    
+
     // internal is moving state
     vctBoolVec m_SoftRevLimitHit;
     vctBoolVec m_SoftFwdLimitHit;
     size_t     m_NumberEncoderPins;
 
-}; // class: mtsGalilControllerSensorFeedback_Templated
+};
 
-CMN_DECLARE_SERVICES_INSTANTIATION(mtsGalilController);
+CMN_DECLARE_SERVICES_INSTANTIATION(mtsGalilController)
 
 #endif
