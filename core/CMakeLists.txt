@@ -12,8 +12,11 @@
 cmake_minimum_required(VERSION 3.10)
 project (sawGalilControllerCore VERSION 0.0.1)
 
+# to locate cisst macros
 find_package (cisst REQUIRED)
-include (${CISST_USE_FILE})
+set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CISST_CMAKE_DIRS})
+include (cisstMacros)
+
 cisst_cpack_settings (
   VENDOR "JHU"
   MAINTAINER "anton.deguet@jhu.edu")
