@@ -73,8 +73,7 @@ if (cisst_FOUND_AS_REQUIRED)
     set_target_properties (
       sawGalilController PROPERTIES
       VERSION ${sawGalilController_VERSION}
-      FOLDER "sawGalilController"
-      PUBLIC_HEADER "${sawGalilController_HEADER_FILES}")
+      FOLDER "sawGalilController")
 
     target_link_libraries (
       sawGalilController
