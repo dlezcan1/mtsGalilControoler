@@ -58,8 +58,10 @@ class CISST_EXPORT mtsGalilControllerDR : public mtsTaskContinuous
     prmStateJoint m_setpoint_js;   // Setpoint joint state (CRTK)
     vctUIntVec    mAxisToGalilChannelMap;   // Map from axis index to Galil channel
     vctDoubleVec  mEncoderCountsPerUnit;    // Encoder conversion factors
+    vctUShortVec  mAxisStatus;              // Axis status
     vctUCharVec   mStopCode;                // Axis stop code (see Galil SC command)
     vctUCharVec   mSwitches;                // Axis switches (see Galil TS command)
+    vctUShortVec  mAnalogIn;                // Axis analog input
     mtsInterfaceProvided *mInterface;       // Provided interface
 
  public:
@@ -100,8 +102,12 @@ protected:
 
     // Move joint to specified position
     void servo_jp(const prmPositionJointSet &jtpos);
+    // Move joint to specified relative position
+    void servo_jr(const prmPositionJointSet &jtpos);
     // Move joint at specified velocity
     void servo_jv(const prmVelocityJointSet &jtvel);
+    // Hold joint at current position (Stop)
+    void hold(void);
 };
 
 CMN_DECLARE_SERVICES_INSTANTIATION(mtsGalilControllerDR)

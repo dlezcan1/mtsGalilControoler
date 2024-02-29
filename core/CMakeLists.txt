@@ -12,8 +12,16 @@
 cmake_minimum_required(VERSION 3.10)
 project (sawGalilControllerCore VERSION 0.0.1)
 
+# create a list of required cisst libraries
+set (REQUIRED_CISST_LIBRARIES
+  cisstCommon
+  cisstVector
+  cisstOSAbstraction
+  cisstMultiTask
+  cisstParameterTypes)
+
 # to locate cisst macros
-find_package (cisst REQUIRED)
+find_package (cisst REQUIRED ${REQUIRED_CISST_LIBRARIES})
 set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CISST_CMAKE_DIRS})
 include (cisstMacros)
 

@@ -60,6 +60,7 @@ struct AxisDataMax : public AxisDataMin {
 
 // Following is information specific to the different Galil DMC controller models.
 // There currently are 6 different DMC model types. We do not support any RIO controllers.
+// Note also the Galil QZ command, which returns information about the DR structure.
 const size_t NUM_MODELS = 6;
 const size_t ADmin = sizeof(AxisDataMin);
 const size_t ADmax = sizeof(AxisDataMax);
@@ -107,6 +108,10 @@ void mtsGalilControllerDR::SetupInterfaces(void)
     StateTable.AddData(mSampleNum, "sample_num");
     StateTable.AddData(m_measured_js, "measured_js");
     StateTable.AddData(m_setpoint_js, "setpoint_js");
+    StateTable.AddData(mAxisStatus, "axis_status");
+    StateTable.AddData(mStopCode, "stop_code");
+    StateTable.AddData(mSwitches, "switches");
+    StateTable.AddData(mAnalogIn, "analog_in");
 
     mInterface = AddInterfaceProvided("control");
     if (mInterface) {
@@ -117,7 +122,9 @@ void mtsGalilControllerDR::SetupInterfaces(void)
         mInterface->AddCommandReadState(this->StateTable, m_measured_js, "measured_js");
         mInterface->AddCommandReadState(this->StateTable, m_setpoint_js, "setpoint_js");
         mInterface->AddCommandWrite(&mtsGalilControllerDR::servo_jp, this, "servo_jp");
+        mInterface->AddCommandWrite(&mtsGalilControllerDR::servo_jr, this, "servo_jr");
         mInterface->AddCommandWrite(&mtsGalilControllerDR::servo_jv, this, "servo_jv");
+        mInterface->AddCommandVoid(&mtsGalilControllerDR::hold, this, "hold");
 
         mInterface->AddCommandVoid(&mtsGalilControllerDR::EnableMotorPower, this, "EnableMotorPower");
         mInterface->AddCommandVoid(&mtsGalilControllerDR::DisableMotorPower, this, "DisableMotorPower");
@@ -132,6 +139,11 @@ void mtsGalilControllerDR::SetupInterfaces(void)
         mInterface->AddCommandRead(&mtsGalilControllerDR::GetConnected, this, "GetConnected");
 		mInterface->AddCommandWrite(&mtsGalilControllerDR::SendCommand, this, "SendCommand");
 		mInterface->AddCommandWriteReturn(&mtsGalilControllerDR::SendCommandRet, this, "SendCommandRet");
+        mInterface->AddCommandReadState(this->StateTable, mAnalogIn, "GetAnalogInput");
+        // Low-level axis data for testing
+        mInterface->AddCommandReadState(this->StateTable, mAxisStatus, "GetAxisStatus");
+        mInterface->AddCommandReadState(this->StateTable, mStopCode, "GetStopCode");
+        mInterface->AddCommandReadState(this->StateTable, mSwitches, "GetSwitches");
     }
 }
 
@@ -223,8 +235,10 @@ void mtsGalilControllerDR::Configure(const std::string& fileName)
 
     mAxisToGalilChannelMap.SetSize(mNumAxes);
     mEncoderCountsPerUnit.SetSize(mNumAxes);
+    mAxisStatus.SetSize(mNumAxes);
     mStopCode.SetSize(mNumAxes);
     mSwitches.SetSize(mNumAxes);
+    mAnalogIn.SetSize(mNumAxes);
 
     for (Json::ArrayIndex i = 0; i < axesArray.size(); i++) {
         const Json::Value curAxis = axesArray[i];
@@ -261,7 +275,6 @@ void mtsGalilControllerDR::Configure(const std::string& fileName)
     // These sizes should be set before calling StateTable.AddData and AddCommandReadState;
     // in the latter case, this ensures that the argument prototype has the correct size.
     SetupInterfaces();
-
 }
 
 void mtsGalilControllerDR::Startup()
@@ -320,10 +333,12 @@ void mtsGalilControllerDR::Run()
                                                                        galilAxis*AxisDataSize[mModel]);
                 m_measured_js.Position()[i] = mEncoderCountsPerUnit[i] * axisPtr->pos;
                 m_measured_js.Velocity()[i] = mEncoderCountsPerUnit[i] * axisPtr->vel;
-                m_measured_js.Effort()[i] = axisPtr->torque;
+                m_measured_js.Effort()[i] = (axisPtr->torque*9.9982)/32767.0;  // See Galil TT command
                 m_setpoint_js.Position()[i] = mEncoderCountsPerUnit[i] * axisPtr->ref_pos;
+                mAxisStatus[i] = axisPtr->status;     // See Galil User Manual
                 mStopCode[i] = axisPtr->stop_code;    // See Galil SC command
-                mSwitches[i] = axisPtr->switches;     // See Galil TS command
+                mSwitches[i] = axisPtr->switches;     // See Galil User Manual
+                mAnalogIn[i] = axisPtr->analog_in;
             }
         }
         else {
@@ -438,7 +453,17 @@ void mtsGalilControllerDR::servo_jp(const prmPositionJointSet &jtpos)
     servo_common("servo_jp", "PA ", jtpos.Goal());
 }
 
+void mtsGalilControllerDR::servo_jr(const prmPositionJointSet &jtpos)
+{
+    servo_common("servo_jr", "PR ", jtpos.Goal());
+}
+
 void mtsGalilControllerDR::servo_jv(const prmVelocityJointSet &jtvel)
 {
     servo_common("servo_jv", "JG ", jtvel.Goal());
+}
+
+void mtsGalilControllerDR::hold(void)
+{
+    SendCommand("ST");
 }
