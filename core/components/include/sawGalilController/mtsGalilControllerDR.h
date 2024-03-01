@@ -37,6 +37,7 @@ http://www.cisst.org/cisst/license.txt.
 #include <cisstParameterTypes/prmStateJoint.h>
 #include <cisstParameterTypes/prmPositionJointSet.h>
 #include <cisstParameterTypes/prmVelocityJointSet.h>
+#include <cisstParameterTypes/prmOperatingState.h>
 
 // Always include last
 #include <sawGalilController/sawGalilControllerExport.h>
@@ -52,14 +53,22 @@ class CISST_EXPORT mtsGalilControllerDR : public mtsTaskContinuous
     unsigned int  mModel;          // Galil model (see list of supported models above)
     std::string   mDmcFile;        // DMC program to download to Galil on startup
     unsigned int  mNumAxes;        // Number of axes
+    unsigned int  mGalilIndexMax;  // Maximum galil channel index
     uint32_t      mHeader;         // Header bytes in DR packet
     uint16_t      mSampleNum;      // Sample number from controller
+    uint8_t       mErrorCode;      // Error code from controller
     prmStateJoint m_measured_js;   // Measured joint state (CRTK)
     prmStateJoint m_setpoint_js;   // Setpoint joint state (CRTK)
+    prmOperatingState m_op_state;  // Operating state (CRTK)
     vctUIntVec    mAxisToGalilChannelMap;   // Map from axis index to Galil channel
+    vctUIntVec    mGalilChannelToAxisMap;   // Map from Galil channel to axis index
     vctDoubleVec  mEncoderCountsPerUnit;    // Encoder conversion factors
+    vctUShortVec  mAxisStatus;              // Axis status
     vctUCharVec   mStopCode;                // Axis stop code (see Galil SC command)
     vctUCharVec   mSwitches;                // Axis switches (see Galil TS command)
+    vctUShortVec  mAnalogIn;                // Axis analog input
+    bool          mMotorPowerOn;            // Whether motor power is on (for all configured motors)
+    bool          mMotionActive;            // Whether a motion is active
     mtsInterfaceProvided *mInterface;       // Provided interface
 
  public:
@@ -69,6 +78,8 @@ class CISST_EXPORT mtsGalilControllerDR : public mtsTaskContinuous
 
     ~mtsGalilControllerDR();
 
+    enum { GALIL_MAX_AXES = 8 };
+
     // cisstMultiTask functions
     void Configure(const std::string &fileName) override;
     void Startup(void) override;
@@ -77,6 +88,28 @@ class CISST_EXPORT mtsGalilControllerDR : public mtsTaskContinuous
 
 protected:
 
+    // String of configured axes (e.g., "ABC")
+    char mGalilAxes[GALIL_MAX_AXES+1];
+    // Boolean array indicating which Galil indexes are valid
+    bool mGalilIndexValid[GALIL_MAX_AXES];
+
+    // Local static method to concatenate cmd (no more than 3 chars, including any spaces)
+    // and axes (no more than GALIL_MAX_AXES chars).
+    // Parameters:
+    //    cmd    Galil command string, including space if desired (e.g, "BG ")
+    //    axes   Galil axes string (e.g., "ABC")
+    // Example output: "BG ABC"
+    static char *GetCmdAxesBuffer(const char *cmd, const char *axes);
+
+    // Local static method to create cmd followed by comma-separated values
+    // Parameters:
+    //    cmd    Galil command string, including space if desired (e.g, "SP ")
+    //    data   Data values (indexed by Galil channel, so valid values may not be contiguous)
+    //    valid  Boolean array indicating which data values are valid
+    //    num    Size of data and valid arrays
+    // Example output: "SP 1000,,500"
+    static char *GetCmdValuesBuffer(const char *cmd, int32_t *data, bool *valid, unsigned int num);
+
     void Init();
     void Close();
 
@@ -84,7 +117,6 @@ protected:
 
     void GetNumAxes(unsigned int &numAxes) const { numAxes = mNumAxes; }
     void GetHeader(uint32_t &header) const { header = mHeader; }
-    void GetSampleNum(unsigned int &sampleNum) const { sampleNum = mSampleNum; }
     void GetConnected(bool &val) const { val = (mGalil != 0); }
 
     void SendCommand(const std::string& cmdString);
@@ -95,13 +127,30 @@ protected:
     // Disable motor power
     void DisableMotorPower(void);
 
-    // Called by servo_jp and servo_jv
-    void servo_common(const char *cmdName, const char *cmdGalil, const vctDoubleVec &goal);
+    // Abort robot command
+    void AbortProgram();
+    void AbortMotion();
+
+    // Common method for sending command to Galil
+    bool galil_cmd_common(const char *cmdName, const char *cmdGalil, const vctDoubleVec &goal,
+                          const vctDoubleVec &conv);
 
     // Move joint to specified position
     void servo_jp(const prmPositionJointSet &jtpos);
+    // Move joint to specified relative position
+    void servo_jr(const prmPositionJointSet &jtpos);
     // Move joint at specified velocity
     void servo_jv(const prmVelocityJointSet &jtvel);
+    // Hold joint at current position (Stop)
+    void hold(void);
+
+    // Set speed, acceleration and deceleration
+    void SetSpeed(const vctDoubleVec &spd);
+    void SetAccel(const vctDoubleVec &accel);
+    void SetDecel(const vctDoubleVec &decel);
+
+    // Set absolute position (e.g., for homing)
+    void SetAbsolutePosition(const vctDoubleVec &pos);
 };
 
 CMN_DECLARE_SERVICES_INSTANTIATION(mtsGalilControllerDR)

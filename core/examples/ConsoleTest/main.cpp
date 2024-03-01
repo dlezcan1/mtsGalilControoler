@@ -41,6 +41,9 @@ private:
     prmStateJoint m_measured_js;
     prmPositionJointSet jtposSet;
     prmVelocityJointSet jtvelSet;
+    prmOperatingState m_op_state;
+    uint16_t mSampleNum;
+    uint8_t  mErrorCode;
 #else
     prmActuatorState m_ActuatorState;
 #endif
@@ -55,9 +58,18 @@ private:
     // mtsGalilRobotDR
     mtsFunctionRead measured_js;
     mtsFunctionRead setpoint_js;
+    mtsFunctionRead operating_state;
     mtsFunctionWrite servo_jp;
+    mtsFunctionWrite servo_jr;
     mtsFunctionWrite servo_jv;
+    mtsFunctionVoid hold;
     mtsFunctionRead get_header;
+    mtsFunctionRead get_sample_num;
+    mtsFunctionRead get_error_code;
+    mtsFunctionRead get_status;
+    mtsFunctionRead get_stop_code;
+    mtsFunctionRead get_switches;
+    mtsFunctionRead get_analog;
 #else
     // mtsGalilRobot
     mtsFunctionRead GetActuatorState;
@@ -81,11 +93,20 @@ public:
             // mtsGalilComponentDR only
             req->AddFunction("measured_js", measured_js);
             req->AddFunction("setpoint_js", setpoint_js);
+            req->AddFunction("operating_state", operating_state);
             req->AddFunction("servo_jp", servo_jp);
+            req->AddFunction("servo_jr", servo_jr);
             req->AddFunction("servo_jv", servo_jv);
+            req->AddFunction("hold", hold);
             req->AddFunction("EnableMotorPower", crtk_enable);
             req->AddFunction("DisableMotorPower", crtk_disable);
-            req->AddFunction("GetHeader", get_header, MTS_OPTIONAL);
+            req->AddFunction("GetHeader", get_header);
+            req->AddFunction("GetSampleNum", get_sample_num);
+            req->AddFunction("GetErrorCode", get_error_code);
+            req->AddFunction("GetAxisStatus", get_status);
+            req->AddFunction("GetStopCode", get_stop_code);
+            req->AddFunction("GetSwitches", get_switches);
+            req->AddFunction("GetAnalogInput", get_analog);
 #else
             // mtsGalilComponent only
             req->AddFunction("GetActuatorState", GetActuatorState);
@@ -103,13 +124,17 @@ public:
         std::cout << "Available commands:" << std::endl
 #ifdef USE_DR
                   << "  m: position move joints (servo_jp)" << std::endl
+                  << "  r: relative move joints (servo_jr)" << std::endl
                   << "  v: velocity move joints (servo_jv)" << std::endl
+                  << "  s: stop move (hold)" << std::endl
 #endif
                   << "  c: send command" << std::endl
                   << "  h: display help information" << std::endl
                   << "  e: enable motor power" << std::endl
                   << "  n: disable motor power" << std::endl
 #ifdef USE_DR
+                  << "  a: get analog input" << std::endl
+                  << "  o: get operating state" << std::endl
                   << "  i: display header info" << std::endl
 #endif
                   << "  q: quit" << std::endl;
@@ -150,6 +175,7 @@ public:
 #ifdef USE_DR
             measured_js(m_measured_js);
             m_measured_js.GetPosition(jtpos);
+            operating_state(m_op_state);
 #else
             GetActuatorState(m_ActuatorState);
             mtsDoubleVec mpos;
@@ -170,8 +196,17 @@ public:
                 for (i = 0; i < NumAxes; i++)
                     std::cin >> jtgoal[i];
                 jtposSet.SetGoal(jtgoal);
-                std::cout << std::endl << "Moving to " << jtgoal << std::endl;
+                std::cout << "Moving to " << jtgoal << std::endl;
                 servo_jp(jtposSet);
+                break;
+
+            case 'r':   // relative move joint
+                std::cout << std::endl << "Enter relative joint positions: ";
+                for (i = 0; i < NumAxes; i++)
+                    std::cin >> jtgoal[i];
+                jtposSet.SetGoal(jtgoal);
+                std::cout << "Relative move by " << jtgoal << std::endl;
+                servo_jr(jtposSet);
                 break;
 
             case 'v':   // velocity move joint
@@ -180,6 +215,10 @@ public:
                     std::cin >> jtvel[i];
                 jtvelSet.SetGoal(jtvel);
                 servo_jv(jtvelSet);
+                break;
+
+            case 's':   // stop move (hold)
+                hold();
                 break;
 #endif
 
@@ -211,6 +250,18 @@ public:
                 break;
 
 #ifdef USE_DR
+            case 'a':
+                {
+                    vctUShortVec analog_in;
+                    get_analog(analog_in);
+                    std::cout << std::endl << "Analog input: " << analog_in << std::endl;
+                }
+                break;
+
+            case 'o':
+                std::cout << std::endl << "Operating state: " << m_op_state << std::endl;
+                break;
+
             case 'i':
                 if (get_header.IsValid()) {
                     uint32_t header;
@@ -229,9 +280,45 @@ public:
         }
 
         if (galilOK) {
-            printf("JOINT POS:   [");
-            for (size_t i = 0; i < jtpos.size(); i++)
+            size_t i;
+#ifdef USE_DR
+            get_sample_num(mSampleNum);
+            get_error_code(mErrorCode);
+            vctUShortVec axStatus;
+            vctUCharVec  axStopCode;
+            vctUCharVec  axSwitches;
+            get_status(axStatus);
+            get_stop_code(axStopCode);
+            get_switches(axSwitches);
+            // Do not know if there is a Galil command to return axis status
+            // Bit meanings:
+            //   15:  axis in motion
+            //    0:  motor off
+            // See Galil User Manual for other bits
+            printf("st: ");
+            for (i = 0; i < axStatus.size(); i++)
+                printf("%x ", (int)axStatus[i]);
+            // Print Stop Code (matches Galil SC command)
+            printf("SC: ");
+            for (i = 0; i < axStopCode.size(); i++)
+                printf("%d ", (int)axStopCode[i]);
+            // Some overlap with Galil TS command, but not the same
+            printf("ts: ");
+            for (i = 0; i < axSwitches.size(); i++)
+                printf("%x ", (int)axSwitches[i]);
+            printf("| ");
+#endif
+            printf("%d (%d) ", (int)mSampleNum, (int)mErrorCode);
+            printf("POS: [");
+            for (i = 0; i < jtpos.size(); i++)
                 printf(" %7.2lf ", jtpos[i]);
+#ifdef USE_DR
+            printf("] TORQUE: [");
+            vctDoubleVec jtt;
+            m_measured_js.GetEffort(jtt);
+            for (i = 0; i < jtt.size(); i++)
+                printf(" %7.2lf ", jtt[i]);
+#endif
             printf("]\r");
         }
         else {
