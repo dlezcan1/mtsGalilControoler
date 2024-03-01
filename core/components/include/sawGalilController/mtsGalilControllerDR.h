@@ -56,6 +56,7 @@ class CISST_EXPORT mtsGalilControllerDR : public mtsTaskContinuous
     unsigned int  mGalilIndexMax;  // Maximum galil channel index
     uint32_t      mHeader;         // Header bytes in DR packet
     uint16_t      mSampleNum;      // Sample number from controller
+    uint8_t       mErrorCode;      // Error code from controller
     prmStateJoint m_measured_js;   // Measured joint state (CRTK)
     prmStateJoint m_setpoint_js;   // Setpoint joint state (CRTK)
     prmOperatingState m_op_state;  // Operating state (CRTK)
@@ -116,7 +117,6 @@ protected:
 
     void GetNumAxes(unsigned int &numAxes) const { numAxes = mNumAxes; }
     void GetHeader(uint32_t &header) const { header = mHeader; }
-    void GetSampleNum(unsigned int &sampleNum) const { sampleNum = mSampleNum; }
     void GetConnected(bool &val) const { val = (mGalil != 0); }
 
     void SendCommand(const std::string& cmdString);

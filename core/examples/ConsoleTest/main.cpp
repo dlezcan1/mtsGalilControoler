@@ -42,6 +42,8 @@ private:
     prmPositionJointSet jtposSet;
     prmVelocityJointSet jtvelSet;
     prmOperatingState m_op_state;
+    uint16_t mSampleNum;
+    uint8_t  mErrorCode;
 #else
     prmActuatorState m_ActuatorState;
 #endif
@@ -62,6 +64,8 @@ private:
     mtsFunctionWrite servo_jv;
     mtsFunctionVoid hold;
     mtsFunctionRead get_header;
+    mtsFunctionRead get_sample_num;
+    mtsFunctionRead get_error_code;
     mtsFunctionRead get_status;
     mtsFunctionRead get_stop_code;
     mtsFunctionRead get_switches;
@@ -97,6 +101,8 @@ public:
             req->AddFunction("EnableMotorPower", crtk_enable);
             req->AddFunction("DisableMotorPower", crtk_disable);
             req->AddFunction("GetHeader", get_header);
+            req->AddFunction("GetSampleNum", get_sample_num);
+            req->AddFunction("GetErrorCode", get_error_code);
             req->AddFunction("GetAxisStatus", get_status);
             req->AddFunction("GetStopCode", get_stop_code);
             req->AddFunction("GetSwitches", get_switches);
@@ -276,6 +282,8 @@ public:
         if (galilOK) {
             size_t i;
 #ifdef USE_DR
+            get_sample_num(mSampleNum);
+            get_error_code(mErrorCode);
             vctUShortVec axStatus;
             vctUCharVec  axStopCode;
             vctUCharVec  axSwitches;
@@ -300,6 +308,7 @@ public:
                 printf("%x ", (int)axSwitches[i]);
             printf("| ");
 #endif
+            printf("%d (%d) ", (int)mSampleNum, (int)mErrorCode);
             printf("POS: [");
             for (i = 0; i < jtpos.size(); i++)
                 printf(" %7.2lf ", jtpos[i]);

@@ -86,6 +86,8 @@ const size_t AxisDataSize[NUM_MODELS]         = { ADmax, ADmax, ADmin, ADmin, AD
 const bool HasHeader[NUM_MODELS]              = {  true,  true, false,  true, false,  true };
 // Byte offset to the sample number
 const unsigned int SampleOffset[NUM_MODELS]   = {     4,     4,     0,     4,     0,     4 };
+// Byte offset to the error code
+const unsigned int ErrorCodeOffset[NUM_MODELS] = {   50,    50,    46,    26,    22,    10 };
 
 CMN_IMPLEMENT_SERVICES_DERIVED_ONEARG(mtsGalilControllerDR, mtsTaskContinuous, mtsTaskContinuousConstructorArg)
 
@@ -116,6 +118,7 @@ void mtsGalilControllerDR::SetupInterfaces(void)
 {
     StateTable.AddData(mHeader, "dr_header");
     StateTable.AddData(mSampleNum, "sample_num");
+    StateTable.AddData(mErrorCode, "error_code");
     StateTable.AddData(m_measured_js, "measured_js");
     StateTable.AddData(m_setpoint_js, "setpoint_js");
     StateTable.AddData(m_op_state, "op_state");
@@ -148,6 +151,7 @@ void mtsGalilControllerDR::SetupInterfaces(void)
         mInterface->AddCommandRead(&mtsGalilControllerDR::GetNumAxes, this, "GetNumAxes");
         mInterface->AddCommandRead(&mtsGalilControllerDR::GetHeader, this, "GetHeader");
         mInterface->AddCommandReadState(this->StateTable, mSampleNum, "GetSampleNum");
+        mInterface->AddCommandReadState(this->StateTable, mErrorCode, "GetErrorCode");
         mInterface->AddCommandRead(&mtsGalilControllerDR::GetConnected, this, "GetConnected");
         mInterface->AddCommandWrite(&mtsGalilControllerDR::SendCommand, this, "SendCommand");
         mInterface->AddCommandWriteReturn(&mtsGalilControllerDR::SendCommandRet, this, "SendCommandRet");
@@ -360,6 +364,7 @@ void mtsGalilControllerDR::Run()
                 mHeader = *reinterpret_cast<uint32_t *>(gRec.byte_array);
             // Controller sample number
             mSampleNum = *reinterpret_cast<uint16_t *>(gRec.byte_array + SampleOffset[mModel]);
+            mErrorCode = gRec.byte_array[ErrorCodeOffset[mModel]];
             // Get the axis data
             // Since we currently do not care about the last 3 entries (in AxisDataMax), we
             // just cast to AxisDataMin and handle the different offsets.
