@@ -10,3 +10,13 @@
 # --- end cisst license ---
 
 add_subdirectory (ConsoleTest)
+
+if (CISST_HAS_QT)
+  option (BUILD_ConsoleQt "Compile sawConsoleQt (requires Qt)" OFF)
+else ()
+  message (STATUS "sawConsoleQt not available (requires Qt)")
+endif ()
+
+if (BUILD_ConsoleQt)
+  add_subdirectory (ConsoleQt)
+endif ()

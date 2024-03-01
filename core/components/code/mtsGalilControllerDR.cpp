@@ -140,9 +140,13 @@ void mtsGalilControllerDR::SetupInterfaces(void)
         mInterface->AddCommandWrite(&mtsGalilControllerDR::servo_jr, this, "servo_jr");
         mInterface->AddCommandWrite(&mtsGalilControllerDR::servo_jv, this, "servo_jv");
         mInterface->AddCommandVoid(&mtsGalilControllerDR::hold, this, "hold");
+        mInterface->AddCommandRead(&mtsGalilControllerDR::GetConfig_js, this, "configuration_js");
 
         mInterface->AddCommandVoid(&mtsGalilControllerDR::EnableMotorPower, this, "EnableMotorPower");
         mInterface->AddCommandVoid(&mtsGalilControllerDR::DisableMotorPower, this, "DisableMotorPower");
+
+        // TEMP: following is to be able to use prmStateRobotQtWidgetComponent
+        mInterface->AddCommandRead(&mtsGalilControllerDR::measured_cp, this, "measured_cp");
 
         // Stats
         mInterface->AddCommandReadState(StateTable, StateTable.PeriodStats, "period_statistics");
@@ -159,7 +163,7 @@ void mtsGalilControllerDR::SetupInterfaces(void)
         mInterface->AddCommandVoid(&mtsGalilControllerDR::AbortProgram, this, "AbortProgram");
         mInterface->AddCommandVoid(&mtsGalilControllerDR::AbortMotion, this, "AbortMotion");
         mInterface->AddCommandWrite(&mtsGalilControllerDR::SetSpeed, this, "SetSpeed");
-        mInterface->AddCommandWrite(&mtsGalilControllerDR::SetAccel, this, "SetSpeed");
+        mInterface->AddCommandWrite(&mtsGalilControllerDR::SetAccel, this, "SetAccel");
         mInterface->AddCommandWrite(&mtsGalilControllerDR::SetDecel, this, "SetDecel");
         mInterface->AddCommandWrite(&mtsGalilControllerDR::SetAbsolutePosition, this, "SetAbsolutePosition");
         // Low-level axis data for testing
@@ -246,6 +250,8 @@ void mtsGalilControllerDR::Configure(const std::string& fileName)
     CMN_LOG_CLASS_INIT_VERBOSE << "Configure: found " << mNumAxes << " axes" << std::endl;
 
     // Now, set the data sizes
+    m_config_j.Name().SetSize(mNumAxes);
+    m_config_j.Type().SetSize(mNumAxes);
     // We have position, velocity and effort for measured_js
     m_measured_js.SetSize(mNumAxes);
     m_measured_js.Position().SetAll(0.0);
@@ -295,15 +301,17 @@ void mtsGalilControllerDR::Configure(const std::string& fileName)
             mGalilIndexMax = galilIndex;   // Save largest GalilIndex for future efficiency
         m_measured_js.Name()[axis].assign(1, galilChannel);
         m_setpoint_js.Name()[axis].assign(1, galilChannel);
+        m_config_j.Name()[axis].assign(1, galilChannel);
+        m_config_j.Type()[axis] = PRM_JOINT_PRISMATIC;
         mEncoderCountsPerUnit[axis] = curAxis.get("Encoder_Conversion", 1.0).asDouble();
     }
     mGalilIndexMax++;   // Increment so that we can test for less than
 
     unsigned int k = 0;
-    for (unsigned int j = 0; j < mGalilIndexMax; j++) {
+    for (i = 0; i < mGalilIndexMax; i++) {
         // If valid axis, add to mGalilAxes
-        if (mGalilIndexValid[j])
-            mGalilAxes[k++] = 'A'+j;
+        if (mGalilIndexValid[i])
+            mGalilAxes[k++] = 'A'+i;
     }
     mGalilAxes[k] = 0;           // NULL termination
 

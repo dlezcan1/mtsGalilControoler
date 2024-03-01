@@ -34,9 +34,11 @@ http://www.cisst.org/cisst/license.txt.
 #include <cisstVector/vctDynamicVectorTypes.h>
 #include <cisstMultiTask/mtsTaskContinuous.h>
 #include <cisstMultiTask/mtsInterfaceProvided.h>
+#include <cisstParameterTypes/prmConfigurationJoint.h>
 #include <cisstParameterTypes/prmStateJoint.h>
 #include <cisstParameterTypes/prmPositionJointSet.h>
 #include <cisstParameterTypes/prmVelocityJointSet.h>
+#include <cisstParameterTypes/prmPositionCartesianGet.h>
 #include <cisstParameterTypes/prmOperatingState.h>
 
 // Always include last
@@ -46,20 +48,21 @@ class CISST_EXPORT mtsGalilControllerDR : public mtsTaskContinuous
 {
     CMN_DECLARE_SERVICES(CMN_DYNAMIC_CREATION_ONEARG, CMN_LOG_LOD_RUN_ERROR)
 
-    void         *mGalil;          // Gcon
-    std::string   mDeviceName;     // IP address
-    bool          mDirectMode;     // Direct connection (not using gcaps)
-    unsigned int  mDR_Period_ms;   // DR period, in milliseconds
-    unsigned int  mModel;          // Galil model (see list of supported models above)
-    std::string   mDmcFile;        // DMC program to download to Galil on startup
-    unsigned int  mNumAxes;        // Number of axes
-    unsigned int  mGalilIndexMax;  // Maximum galil channel index
-    uint32_t      mHeader;         // Header bytes in DR packet
-    uint16_t      mSampleNum;      // Sample number from controller
-    uint8_t       mErrorCode;      // Error code from controller
-    prmStateJoint m_measured_js;   // Measured joint state (CRTK)
-    prmStateJoint m_setpoint_js;   // Setpoint joint state (CRTK)
-    prmOperatingState m_op_state;  // Operating state (CRTK)
+    void         *mGalil;                   // Gcon
+    std::string   mDeviceName;              // IP address
+    bool          mDirectMode;              // Direct connection (not using gcaps)
+    unsigned int  mDR_Period_ms;            // DR period, in milliseconds
+    unsigned int  mModel;                   // Galil model (see list of supported models above)
+    std::string   mDmcFile;                 // DMC program to download to Galil on startup
+    unsigned int  mNumAxes;                 // Number of axes
+    unsigned int  mGalilIndexMax;           // Maximum galil channel index
+    uint32_t      mHeader;                  // Header bytes in DR packet
+    uint16_t      mSampleNum;               // Sample number from controller
+    uint8_t       mErrorCode;               // Error code from controller
+    prmConfigurationJoint m_config_j;       // Joint configuration
+    prmStateJoint m_measured_js;            // Measured joint state (CRTK)
+    prmStateJoint m_setpoint_js;            // Setpoint joint state (CRTK)
+    prmOperatingState m_op_state;           // Operating state (CRTK)
     vctUIntVec    mAxisToGalilChannelMap;   // Map from axis index to Galil channel
     vctUIntVec    mGalilChannelToAxisMap;   // Map from Galil channel to axis index
     vctDoubleVec  mEncoderCountsPerUnit;    // Encoder conversion factors
@@ -143,6 +146,14 @@ protected:
     void servo_jv(const prmVelocityJointSet &jtvel);
     // Hold joint at current position (Stop)
     void hold(void);
+
+    // Get joint configuration
+    void GetConfig_js(prmConfigurationJoint &cfg_j) const
+    { cfg_j = m_config_j; }
+
+    // TEMP: following is to be able to use prmStateRobotQtWidgetComponent
+    void measured_cp(prmPositionCartesianGet &pos) const
+    { pos = prmPositionCartesianGet(); }
 
     // Set speed, acceleration and deceleration
     void SetSpeed(const vctDoubleVec &spd);
