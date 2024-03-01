@@ -99,7 +99,7 @@ int main(int argc, char * argv[])
     // organize all widgets in a tab widget
     QTabWidget * tabWidget = new QTabWidget;
     mtsSystemQtWidgetComponent * systemWidget
-        = new mtsSystemQtWidgetComponent("UR-System");
+        = new mtsSystemQtWidgetComponent("Galil-System");
     systemWidget->Configure();
     componentManager->AddComponent(systemWidget);
     componentManager->Connect(systemWidget->GetName(), "Component",
