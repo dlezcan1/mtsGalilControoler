@@ -99,7 +99,7 @@ void mtsGalilController::Configure(const std::string& fileName)
         {
             unsigned int axisIndex = it.index();
 
-            unsigned int galilIndex  = it->get("Galil_Axis_Index", axisIndex).asUInt();
+            unsigned int galilIndex  = it->get("Galil_Channel", axisIndex).asUInt();
             double encoderConversion = it->get("Encoder_Conversion", 1.0).asDouble();
 
             m_EncoderCountsPerUnit[axisIndex]               = encoderConversion;
