@@ -41,6 +41,7 @@ private:
     prmStateJoint m_measured_js;
     prmPositionJointSet jtposSet;
     prmVelocityJointSet jtvelSet;
+    prmOperatingState m_op_state;
 #else
     prmActuatorState m_ActuatorState;
 #endif
@@ -55,6 +56,7 @@ private:
     // mtsGalilRobotDR
     mtsFunctionRead measured_js;
     mtsFunctionRead setpoint_js;
+    mtsFunctionRead operating_state;
     mtsFunctionWrite servo_jp;
     mtsFunctionWrite servo_jr;
     mtsFunctionWrite servo_jv;
@@ -87,6 +89,7 @@ public:
             // mtsGalilComponentDR only
             req->AddFunction("measured_js", measured_js);
             req->AddFunction("setpoint_js", setpoint_js);
+            req->AddFunction("operating_state", operating_state);
             req->AddFunction("servo_jp", servo_jp);
             req->AddFunction("servo_jr", servo_jr);
             req->AddFunction("servo_jv", servo_jv);
@@ -125,6 +128,7 @@ public:
                   << "  n: disable motor power" << std::endl
 #ifdef USE_DR
                   << "  a: get analog input" << std::endl
+                  << "  o: get operating state" << std::endl
                   << "  i: display header info" << std::endl
 #endif
                   << "  q: quit" << std::endl;
@@ -165,6 +169,7 @@ public:
 #ifdef USE_DR
             measured_js(m_measured_js);
             m_measured_js.GetPosition(jtpos);
+            operating_state(m_op_state);
 #else
             GetActuatorState(m_ActuatorState);
             mtsDoubleVec mpos;
@@ -245,6 +250,10 @@ public:
                     get_analog(analog_in);
                     std::cout << std::endl << "Analog input: " << analog_in << std::endl;
                 }
+                break;
+
+            case 'o':
+                std::cout << std::endl << "Operating state: " << m_op_state << std::endl;
                 break;
 
             case 'i':
