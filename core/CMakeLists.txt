@@ -14,8 +14,7 @@ project (sawGalilControllerCore VERSION 0.0.1)
 
 # to locate cisst macros
 find_package (cisst REQUIRED cisstCommon)
-set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CISST_CMAKE_DIRS})
-include (cisstMacros)
+include (${CISST_USE_FILE})
 
 cisst_cpack_settings (
   VENDOR "JHU"

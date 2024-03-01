@@ -145,7 +145,7 @@ void mtsGalilControllerDR::SetupInterfaces(void)
         mInterface->AddCommandVoid(&mtsGalilControllerDR::DisableMotorPower, this, "DisableMotorPower");
 
         // Stats
-        mInterface->AddCommandReadState(StateTable, StateTable.PeriodStats, "GetPeriodStatistics");
+        mInterface->AddCommandReadState(StateTable, StateTable.PeriodStats, "period_statistics");
 
         // Extra stuff
         mInterface->AddCommandRead(&mtsGalilControllerDR::GetNumAxes, this, "GetNumAxes");
@@ -212,8 +212,9 @@ void mtsGalilControllerDR::Configure(const std::string& fileName)
     CMN_LOG_CLASS_INIT_VERBOSE << "Configure: setting IP address " << mDeviceName << std::endl;
 
     mDirectMode = jsonConfig.get("Galil_Direct", false).asBool();
-    if (mDirectMode)
+    if (mDirectMode) {
         CMN_LOG_CLASS_INIT_VERBOSE << "Configure: setting Galil direct mode" << std::endl;
+    }
 
     unsigned int modelType = jsonConfig.get("Galil_Model", 4000).asUInt();
     unsigned int i;
@@ -321,11 +322,13 @@ void mtsGalilControllerDR::Configure(const std::string& fileName)
 void mtsGalilControllerDR::Startup()
 {
     std::string GalilString = mDeviceName;
-    if (mDirectMode)
+    if (mDirectMode) {
         GalilString.append(" -d");
+    }
     GalilString.append(" -s DR");  // Subscribe to DR records
     GReturn ret = GOpen(GalilString.c_str(), &mGalil);
     if (ret != G_NO_ERROR) {
+        mInterface->SendError(this->GetName() + ": error opening " + mDeviceName);
         CMN_LOG_CLASS_INIT_ERROR << "Galil GOpen: error opening " << mDeviceName
                                  << ": " << ret << std::endl;
         return;
