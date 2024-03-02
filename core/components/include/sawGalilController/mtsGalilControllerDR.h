@@ -59,6 +59,7 @@ class CISST_EXPORT mtsGalilControllerDR : public mtsTaskContinuous
     uint32_t      mHeader;                  // Header bytes in DR packet
     uint16_t      mSampleNum;               // Sample number from controller
     uint8_t       mErrorCode;               // Error code from controller
+    uint32_t      mAmpStatus;               // Amplifier status
     prmConfigurationJoint m_config_j;       // Joint configuration
     prmStateJoint m_measured_js;            // Measured joint state (CRTK)
     prmStateJoint m_setpoint_js;            // Setpoint joint state (CRTK)

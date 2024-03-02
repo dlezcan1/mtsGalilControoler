@@ -32,6 +32,10 @@ http://www.cisst.org/cisst/license.txt.
 //   - GDataRecord2103 (DMC 2103)
 //   - GDataRecord1802 (DMC 1802)
 //   - GDataRecord30000 (DMC 30010)
+//
+// Galil User Manual states: "The velocity information that is returned in the data
+// record is 64 times larger than the value returned when using the command TV (Tell Velocity)"
+
 struct AxisDataMin {
     uint16_t status;
     uint8_t  switches;
@@ -68,6 +72,20 @@ const uint8_t  SwitchFwdLimit        = 0x08;
 const uint8_t  SwitchRevLimit        = 0x04;
 const uint8_t  SwitchHome            = 0x02;
 
+// Bit masks for Amplifier Status
+const uint32_t AmpEloUpper          = 0x02000000;  // ELO active (axes E-H)
+const uint32_t AmpEloLower          = 0x01000000;  // ELO active (axes A-D)
+const uint32_t AmpPeakCurrentA      = 0x00010000;  // Peak current for axis A (left shift for B-H)
+const uint32_t AmpHallErrorA        = 0x00000100;  // Hall error for axis A (left shift for B-h)
+const uint32_t AmpUnderVoltageUpper = 0x00000080;  // Under-voltage (axes E-H)
+const uint32_t AmpOverTempUpper     = 0x00000040;  // Over-temperature (axes E-H)
+const uint32_t AmpOverVoltageUpper  = 0x00000020;  // Over-voltage (axes E-H)
+const uint32_t AmpOverCurrentUpper  = 0x00000010;  // Over-current (axes E-H)
+const uint32_t AmpUnderVoltageLower = 0x00000008;  // Under-voltage (axes A-D)
+const uint32_t AmpOverTempLower     = 0x00000004;  // Over-temperature (axes A-D)
+const uint32_t AmpOverVoltageLower  = 0x00000002;  // Over-voltage (axes A-D)
+const uint32_t AmpOverCurrentLower  = 0x00000001;  // Over-current (axes A-D)
+
 // Following is information specific to the different Galil DMC controller models.
 // There currently are 6 different DMC model types. We do not support any RIO controllers.
 // Note also the Galil QZ command, which returns information about the DR structure.
@@ -81,24 +99,29 @@ const unsigned int AxisDataOffset[NUM_MODELS] = {    82,    82,    78 ,   44,   
 // Size of the axis data
 const size_t AxisDataSize[NUM_MODELS]         = { ADmax, ADmax, ADmin, ADmin, ADmin, ADmax };
 // Whether the first 4 bytes contain header information
-// Galil does not document the contents of the header. For at least one DMC-4143, the header
-// bytes are: 135 (0x87), 15 (0xf), 226 (0xe2), 0
+// For DMC-4143, the header bytes are: 135 (0x87), 15 (0x0f), 226 , 0
+//   0x87 MSB always set; 7 indicates that I (Input), T (T Plane) and S (S Plane) blocks present
+//   0x0f indicates that blocks (axes) A-D are present, but not E-H
+//   last two bytes (swapped) are the size of the data record (226 bytes for DMC-4143)
 const bool HasHeader[NUM_MODELS]              = {  true,  true, false,  true, false,  true };
 // Byte offset to the sample number
 const unsigned int SampleOffset[NUM_MODELS]   = {     4,     4,     0,     4,     0,     4 };
 // Byte offset to the error code
 const unsigned int ErrorCodeOffset[NUM_MODELS] = {   50,    50,    46,    26,    22,    10 };
+// Byte offset to amplifier status (-1 means not available)
+const int AmpStatusOffset[NUM_MODELS]          = {   52,    52,    -1,    -1,    -1,    18 };
 
 CMN_IMPLEMENT_SERVICES_DERIVED_ONEARG(mtsGalilControllerDR, mtsTaskContinuous, mtsTaskContinuousConstructorArg)
 
 mtsGalilControllerDR::mtsGalilControllerDR(const std::string &name, unsigned int sizeStateTable, bool newThread) :
-    mtsTaskContinuous(name, sizeStateTable, newThread), mGalil(0), mHeader(0), mMotorPowerOn(false), mMotionActive(false)
+    mtsTaskContinuous(name, sizeStateTable, newThread), mGalil(0), mHeader(0), mAmpStatus(0),
+    mMotorPowerOn(false), mMotionActive(false)
 {
     Init();
 }
 
 mtsGalilControllerDR::mtsGalilControllerDR(const mtsTaskContinuousConstructorArg & arg) :
-    mtsTaskContinuous(arg), mGalil(0), mHeader(0), mMotorPowerOn(false), mMotionActive(false)
+    mtsTaskContinuous(arg), mGalil(0), mHeader(0),mAmpStatus(0),  mMotorPowerOn(false), mMotionActive(false)
 {
     Init();
 }
@@ -376,6 +399,8 @@ void mtsGalilControllerDR::Run()
             // Controller sample number
             mSampleNum = *reinterpret_cast<uint16_t *>(gRec.byte_array + SampleOffset[mModel]);
             mErrorCode = gRec.byte_array[ErrorCodeOffset[mModel]];
+            if (AmpStatusOffset[mModel] >= 0)
+                mAmpStatus = *reinterpret_cast<uint32_t *>(gRec.byte_array + AmpStatusOffset[mModel]);
             // Get the axis data
             // Since we currently do not care about the last 3 entries (in AxisDataMax), we
             // just cast to AxisDataMin and handle the different offsets.
