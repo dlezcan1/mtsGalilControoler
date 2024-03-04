@@ -280,15 +280,18 @@ void mtsGalilControllerDR::Configure(const std::string& fileName)
     // Now, set the data sizes
     m_config_j.Name().SetSize(mNumAxes);
     m_config_j.Type().SetSize(mNumAxes);
-    // We have position, velocity and effort for measured_js
-    m_measured_js.SetSize(mNumAxes);
+    // We have position and velocity for measured_js
+    m_measured_js.Name().SetSize(mNumAxes);
+    m_setpoint_js.Position().SetSize(mNumAxes);
+    m_setpoint_js.Velocity().SetSize(mNumAxes);
     m_measured_js.Position().SetAll(0.0);
     m_measured_js.Velocity().SetAll(0.0);
-    m_measured_js.Effort().SetAll(0.0);
-    // We have only position for setpoint_js
+    // We have position and effort for setpoint_js
     m_setpoint_js.Name().SetSize(mNumAxes);
     m_setpoint_js.Position().SetSize(mNumAxes);
+    m_setpoint_js.Effort().SetSize(mNumAxes);
     m_setpoint_js.Position().SetAll(0.);
+    m_measured_js.Effort().SetAll(0.0);
 
     mActuatorState.SetSize(mNumAxes);
     mActuatorState.Position().SetAll(0.0);
@@ -423,8 +426,8 @@ void mtsGalilControllerDR::Run()
                                                                        galilAxis*AxisDataSize[mModel]);
                 m_measured_js.Position()[i] = mEncoderCountsPerUnit[i] * axisPtr->pos;
                 m_measured_js.Velocity()[i] = mEncoderCountsPerUnit[i] * axisPtr->vel;
-                m_measured_js.Effort()[i] = (axisPtr->torque*9.9982)/32767.0;  // See Galil TT command
                 m_setpoint_js.Position()[i] = mEncoderCountsPerUnit[i] * axisPtr->ref_pos;
+                m_setpoint_js.Effort()[i] = (axisPtr->torque*9.9982)/32767.0;  // See Galil TT command
                 mAxisStatus[i] = axisPtr->status;     // See Galil User Manual
                 mStopCode[i] = axisPtr->stop_code;    // See Galil SC command
                 mSwitches[i] = axisPtr->switches;     // See Galil User Manual
