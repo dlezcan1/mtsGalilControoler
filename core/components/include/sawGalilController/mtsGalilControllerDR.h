@@ -114,7 +114,12 @@ protected:
     //    valid  Boolean array indicating which data values are valid
     //    num    Size of data and valid arrays
     // Example output: "SP 1000,,500"
-    static char *GetCmdValuesBuffer(const char *cmd, int32_t *data, bool *valid, unsigned int num);
+    static char *GetCmdValuesBuffer(const char *cmd, const int32_t *data, const bool *valid, unsigned int num);
+
+    // Local method to create boolean array from vctBoolVec, also remapping from robot axis to Galil index
+    const bool *mtsGalilControllerDR::GetGalilIndexValid(const vctBoolVec &mask) const;
+    // Local method to create axes string for specified array of valid Galil indices
+    const char *mtsGalilControllerDR::GetGalilAxes(const bool *galilIndexValid) const;
 
     void Init();
     void Close();
@@ -162,6 +167,10 @@ protected:
     void SetSpeed(const vctDoubleVec &spd);
     void SetAccel(const vctDoubleVec &accel);
     void SetDecel(const vctDoubleVec &decel);
+
+    // Home: mask indicates which axes to home
+    void Home(const vctBoolVec &mask);
+    void UnHome(const vctBoolVec &mask);
 
     // Set absolute position (e.g., for homing)
     void SetAbsolutePosition(const vctDoubleVec &pos);

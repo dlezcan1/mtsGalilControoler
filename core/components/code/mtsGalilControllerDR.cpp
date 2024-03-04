@@ -190,6 +190,8 @@ void mtsGalilControllerDR::SetupInterfaces(void)
         mInterface->AddCommandWrite(&mtsGalilControllerDR::SetSpeed, this, "SetSpeed");
         mInterface->AddCommandWrite(&mtsGalilControllerDR::SetAccel, this, "SetAccel");
         mInterface->AddCommandWrite(&mtsGalilControllerDR::SetDecel, this, "SetDecel");
+        mInterface->AddCommandWrite(&mtsGalilControllerDR::Home, this, "Home");
+        mInterface->AddCommandWrite(&mtsGalilControllerDR::UnHome, this, "UnHome");
         mInterface->AddCommandWrite(&mtsGalilControllerDR::SetAbsolutePosition, this, "SetAbsolutePosition");
         mInterface->AddCommandReadState(this->StateTable, mActuatorState, "GetActuatorState");
         // Low-level axis data for testing
@@ -504,7 +506,7 @@ char *mtsGalilControllerDR::GetCmdAxesBuffer(const char *cmd, const char *axes)
 }
 
 // Returns command, followed by list of values (e.g., "SP 1000,,500")
-char *mtsGalilControllerDR::GetCmdValuesBuffer(const char *cmd, int32_t *data, bool *valid, unsigned int num)
+char *mtsGalilControllerDR::GetCmdValuesBuffer(const char *cmd, const int32_t *data, const bool *valid, unsigned int num)
 {
     static char Cmd_buffer[G_SMALL_BUFFER];
 
@@ -641,6 +643,67 @@ void mtsGalilControllerDR::SetAccel(const vctDoubleVec &accel)
 void mtsGalilControllerDR::SetDecel(const vctDoubleVec &decel)
 {
     galil_cmd_common("SetDecel", "DC ", decel, mEncoderCountsPerUnit);
+}
+
+const bool *mtsGalilControllerDR::GetGalilIndexValid(const vctBoolVec &mask) const
+{
+    unsigned int i;
+    static bool galilIndexValid[GALIL_MAX_AXES];
+    for (i = 0; i < mGalilIndexMax; i++)
+        galilIndexValid[i] = false;
+    for (i = 0; i < mask.size(); i++) {
+        if (mask[i]) {
+            unsigned int galilIndex = mAxisToGalilChannelMap[i];
+            galilIndexValid[galilIndex] = true;
+        }
+    }
+    return galilIndexValid;
+}
+
+const char *mtsGalilControllerDR::GetGalilAxes(const bool *galilIndexValid) const
+{
+    static char galilMaskString[GALIL_MAX_AXES+1];
+    unsigned int i;
+    unsigned int k = 0;
+    for (i = 0; i < mGalilIndexMax; i++) {
+        if (galilIndexValid[i]) {
+            galilMaskString[k++] = 'A' + i;
+        }
+    }
+    galilMaskString[k] = 0;  // NULL terminate
+    return galilMaskString;
+}
+
+void mtsGalilControllerDR::Home(const vctBoolVec &mask)
+{
+    const bool *galilIndexValid = GetGalilIndexValid(mask);
+    const char *galilAxes = GetGalilAxes(galilIndexValid);
+
+    CMN_LOG_CLASS_RUN_VERBOSE << "Home: " << mask << ", axes: " << galilAxes << std::endl;
+
+    SendCommand(GetCmdAxesBuffer("ST ", galilAxes));
+    SendCommand("HM");
+    SendCommand(GetCmdAxesBuffer("BG ", galilAxes));
+    UnHome(mask);
+
+    // TODO: Following needs to be in state machine
+    // ST_HOMING
+    // WaitMotion();
+
+    // TODO: could also call SetAbsolutePosition
+    int32_t galilData[GALIL_MAX_AXES];
+    for (unsigned int i = 0; i < mGalilIndexMax; i++)
+        galilData[i] = 1;
+    SendCommand(GetCmdValuesBuffer("ZA ", galilData, galilIndexValid, mGalilIndexMax));
+}
+
+void mtsGalilControllerDR::UnHome(const vctBoolVec &mask)
+{
+    const bool *galilIndexValid = GetGalilIndexValid(mask);
+    int32_t galilData[GALIL_MAX_AXES];
+    for (unsigned int i = 0; i < mGalilIndexMax; i++)
+        galilData[i] = 0;
+    SendCommand(GetCmdValuesBuffer("ZA ", galilData, galilIndexValid, mGalilIndexMax));
 }
 
 void mtsGalilControllerDR::SetAbsolutePosition(const vctDoubleVec &pos)
