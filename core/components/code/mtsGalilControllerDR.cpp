@@ -68,6 +68,7 @@ const uint16_t StatusMotorMoving     = 0x8000;
 const uint16_t StatusFindEdgeActive  = 0x1000;
 const uint16_t StatusFindIndexActive = 0x0200;
 const uint16_t StatusMotorOff        = 0x0001;
+
 const uint8_t  SwitchFwdLimit        = 0x08;
 const uint8_t  SwitchRevLimit        = 0x04;
 const uint8_t  SwitchHome            = 0x02;
@@ -149,6 +150,7 @@ void mtsGalilControllerDR::SetupInterfaces(void)
     StateTable.AddData(mStopCode, "stop_code");
     StateTable.AddData(mSwitches, "switches");
     StateTable.AddData(mAnalogIn, "analog_in");
+    StateTable.AddData(mActuatorState, "actuator_state");
 
     mInterface = AddInterfaceProvided("control");
     if (mInterface) {
@@ -189,6 +191,7 @@ void mtsGalilControllerDR::SetupInterfaces(void)
         mInterface->AddCommandWrite(&mtsGalilControllerDR::SetAccel, this, "SetAccel");
         mInterface->AddCommandWrite(&mtsGalilControllerDR::SetDecel, this, "SetDecel");
         mInterface->AddCommandWrite(&mtsGalilControllerDR::SetAbsolutePosition, this, "SetAbsolutePosition");
+        mInterface->AddCommandReadState(this->StateTable, mActuatorState, "GetActuatorState");
         // Low-level axis data for testing
         mInterface->AddCommandReadState(this->StateTable, mAxisStatus, "GetAxisStatus");
         mInterface->AddCommandReadState(this->StateTable, mStopCode, "GetStopCode");
@@ -284,6 +287,10 @@ void mtsGalilControllerDR::Configure(const std::string& fileName)
     m_setpoint_js.Name().SetSize(mNumAxes);
     m_setpoint_js.Position().SetSize(mNumAxes);
     m_setpoint_js.Position().SetAll(0.);
+
+    mActuatorState.SetSize(mNumAxes);
+    mActuatorState.Position().SetAll(0.0);
+    mActuatorState.Velocity().SetAll(0.0);
 
     mAxisToGalilChannelMap.SetSize(mNumAxes);
     mGalilChannelToAxisMap.SetSize(GALIL_MAX_AXES);
@@ -426,7 +433,29 @@ void mtsGalilControllerDR::Run()
                     isAllMotorOn = false;
                 else
                     isAllMotorOff = false;
+                // Following for mActuatorState
+                mActuatorState.Position()[i] = m_measured_js.Position()[i];
+                mActuatorState.Velocity()[i] = m_measured_js.Velocity()[i];
+                mActuatorState.InMotion()[i] = mAxisStatus[i] & StatusMotorMoving;
+                mActuatorState.MotorOff()[i] = mAxisStatus[i] & StatusMotorOff;
+                mActuatorState.SoftFwdLimitHit()[i] = (mStopCode[i] == 2);
+                mActuatorState.SoftRevLimitHit()[i] = (mStopCode[i] == 3);
+                mActuatorState.HardFwdLimitHit()[i] = mSwitches[i] & SwitchFwdLimit;
+                mActuatorState.HardRevLimitHit()[i] = mSwitches[i] & SwitchRevLimit;
+                mActuatorState.HomeSwitchOn()[i]    = mSwitches[i] & SwitchHome;
+                if (AxisDataSize[mModel] == ADmax) {
+                    mActuatorState.IsHomed()[i] = reinterpret_cast<AxisDataMax *>(axisPtr)->var;
+                }
+                else {
+                    // Probably look at a cached version of IsHomed
+                }
             }
+            // TODO: check following logic
+            mActuatorState.SetEStopON(mAmpStatus & (AmpEloUpper | AmpEloLower));
+            // TODO: previous implementation used TIME (i.e., "MG TIME"); do we need that, or
+            // is it sufficient to use mSampleNum, perhaps scaled by the DR period
+            mActuatorState.SetTimestamp(mSampleNum);
+
             if (!isAllMotorOn && !isAllMotorOff) {
                 // If a mix of on/off motors, turn them all off
                 mInterface->SendWarning(this->GetName() + ": turning off all motors");
@@ -562,7 +591,7 @@ bool mtsGalilControllerDR::galil_cmd_common(const char *cmdName, const char *cmd
     size_t i;
     for (i = 0; i < mNumAxes; i++) {
         unsigned int galilIndex = mAxisToGalilChannelMap[i];
-        galilData[galilIndex] = static_cast<int32_t>(data[i]/conv[i]);
+        galilData[galilIndex] = static_cast<int32_t>(std::round(data[i]/conv[i]));
     }
 
     SendCommand(GetCmdValuesBuffer(cmdGalil, galilData, mGalilIndexValid, mGalilIndexMax));
@@ -589,7 +618,9 @@ void mtsGalilControllerDR::servo_jr(const prmPositionJointSet &jtpos)
 
 void mtsGalilControllerDR::servo_jv(const prmVelocityJointSet &jtvel)
 {
-    galil_cmd_common("servo_jv", "JG ", jtvel.Goal(), mEncoderCountsPerUnit);
+    // TODO: Only need to send BG after the first JG command
+    if (galil_cmd_common("servo_jv", "JG ", jtvel.Goal(), mEncoderCountsPerUnit))
+        SendCommand(GetCmdAxesBuffer("BG ", mGalilAxes));
 }
 
 void mtsGalilControllerDR::hold(void)

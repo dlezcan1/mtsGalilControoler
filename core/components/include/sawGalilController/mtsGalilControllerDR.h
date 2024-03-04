@@ -40,6 +40,7 @@ http://www.cisst.org/cisst/license.txt.
 #include <cisstParameterTypes/prmVelocityJointSet.h>
 #include <cisstParameterTypes/prmPositionCartesianGet.h>
 #include <cisstParameterTypes/prmOperatingState.h>
+#include <cisstParameterTypes/prmActuatorState.h>
 
 // Always include last
 #include <sawGalilController/sawGalilControllerExport.h>
@@ -64,6 +65,7 @@ class CISST_EXPORT mtsGalilControllerDR : public mtsTaskContinuous
     prmStateJoint m_measured_js;            // Measured joint state (CRTK)
     prmStateJoint m_setpoint_js;            // Setpoint joint state (CRTK)
     prmOperatingState m_op_state;           // Operating state (CRTK)
+    prmActuatorState mActuatorState;        // Actuator state
     vctUIntVec    mAxisToGalilChannelMap;   // Map from axis index to Galil channel
     vctUIntVec    mGalilChannelToAxisMap;   // Map from Galil channel to axis index
     vctDoubleVec  mEncoderCountsPerUnit;    // Encoder conversion factors
