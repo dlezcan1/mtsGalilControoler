@@ -196,27 +196,30 @@ public:
 
 #ifdef USE_DR
             case 'm':   // position move joint
-                std::cout << std::endl << "Enter joint positions: ";
+                std::cout << std::endl << "Enter joint positions (mm): ";
                 for (i = 0; i < NumAxes; i++)
                     std::cin >> jtgoal[i];
-                jtposSet.SetGoal(jtgoal);
                 std::cout << "Moving to " << jtgoal << std::endl;
+                jtgoal.Divide(1000.0);   // Convert to SI
+                jtposSet.SetGoal(jtgoal);
                 servo_jp(jtposSet);
                 break;
 
             case 'r':   // relative move joint
-                std::cout << std::endl << "Enter relative joint positions: ";
+                std::cout << std::endl << "Enter relative joint positions (mm): ";
                 for (i = 0; i < NumAxes; i++)
                     std::cin >> jtgoal[i];
-                jtposSet.SetGoal(jtgoal);
                 std::cout << "Relative move by " << jtgoal << std::endl;
+                jtgoal.Divide(1000.0);   // Convert to SI
+                jtposSet.SetGoal(jtgoal);
                 servo_jr(jtposSet);
                 break;
 
             case 'v':   // velocity move joint
-                std::cout << std::endl << "Enter joint velocities: ";
+                std::cout << std::endl << "Enter joint velocities (mm/s): ";
                 for (i = 0; i < NumAxes; i++)
                     std::cin >> jtvel[i];
+                jtvel.Divide(1000.0);   // Convert to SI
                 jtvelSet.SetGoal(jtvel);
                 servo_jv(jtvelSet);
                 break;
@@ -318,6 +321,7 @@ public:
             printf("| ");
 #endif
             printf("%d (%d) ", (int)mSampleNum, (int)mErrorCode);
+            jtpos.Multiply(1000.0);  // Convert to mm for display
             printf("POS: [");
             for (i = 0; i < jtpos.size(); i++)
                 printf(" %7.2lf ", jtpos[i]);

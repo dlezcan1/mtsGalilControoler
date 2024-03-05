@@ -12,15 +12,15 @@
     "Axes": [
         {
             "Galil_Channel": 0,
-            "Encoder_Conversion": 0.001
+            "Encoder_Conversion": 0.000001
         },
         {
             "Galil_Channel": 1,
-            "Encoder_Conversion": 0.001
+            "Encoder_Conversion": 0.000001
         },
         {
             "Galil_Channel": 2,
-            "Encoder_Conversion": 0.001
+            "Encoder_Conversion": 0.000001
         }
     ]
 }
