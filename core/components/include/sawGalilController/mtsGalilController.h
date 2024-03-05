@@ -4,6 +4,19 @@
 /*
   (C) Copyright 2024 Johns Hopkins University (JHU), All Rights Reserved.
 
+  This component provides an interface to a Galil DMC controller, using the DR
+  (DataRecord) approach, where the Galil controller periodically sends a data
+  record. The format of the data record varies based on Galil DMC model type,
+  which can be specified (as "Galil_Model") in the JSON configuration file.
+  Valid values of "Galil_Model" (which is an unsigned integer) are:
+
+      4000   for DMC 4000, 4200, 4103, and 500x0 (default)
+     52000   for DMC 52000
+      1806   for DMC 1806
+      2103   for DMC 2103
+      1802   for DMC 1802
+     30000   for DMC 30010
+
 --- begin cisst license - do not edit ---
 
 This software is provided "as is" under an open source license, with
@@ -13,256 +26,154 @@ http://www.cisst.org/cisst/license.txt.
 --- end cisst license ---
 */
 
-#ifndef _mtsGalilContoller_h
-#define _mtsGalilContoller_h
+#ifndef _mtsGalilContollerDR_h
+#define _mtsGalilContollerDR_h
 
 #include <string>
-#include <vector>
-
-#include <gclib.h>
-#include <gclibo.h>
 
 #include <cisstVector/vctDynamicVectorTypes.h>
+#include <cisstMultiTask/mtsTaskContinuous.h>
+#include <cisstMultiTask/mtsInterfaceProvided.h>
+#include <cisstParameterTypes/prmConfigurationJoint.h>
+#include <cisstParameterTypes/prmStateJoint.h>
+#include <cisstParameterTypes/prmPositionJointSet.h>
+#include <cisstParameterTypes/prmVelocityJointSet.h>
+#include <cisstParameterTypes/prmPositionCartesianGet.h>
+#include <cisstParameterTypes/prmOperatingState.h>
 #include <cisstParameterTypes/prmActuatorState.h>
-#include <cisstParameterTypes/prmMaskedVector.h>
-#include <cisstMultiTask/mtsTaskPeriodic.h>
 
 // Always include last
 #include <sawGalilController/sawGalilControllerExport.h>
 
-class CISST_EXPORT mtsGalilController : public mtsTaskPeriodic
+class CISST_EXPORT mtsGalilController : public mtsTaskContinuous
 {
     CMN_DECLARE_SERVICES(CMN_DYNAMIC_CREATION_ONEARG, CMN_LOG_LOD_RUN_ERROR)
 
-public:
-    mtsGalilController(const std::string &componentName, double period_secs);
-    mtsGalilController(const mtsTaskPeriodicConstructorArg &arg);
+    void         *mGalil;                   // Gcon
+    std::string   mDeviceName;              // IP address
+    bool          mDirectMode;              // Direct connection (not using gcaps)
+    unsigned int  mDR_Period_ms;            // DR period, in milliseconds
+    unsigned int  mModel;                   // Galil model (see list of supported models above)
+    std::string   mDmcFile;                 // DMC program to download to Galil on startup
+    unsigned int  mNumAxes;                 // Number of axes
+    unsigned int  mGalilIndexMax;           // Maximum galil channel index
+    uint32_t      mHeader;                  // Header bytes in DR packet
+    uint16_t      mSampleNum;               // Sample number from controller
+    uint8_t       mErrorCode;               // Error code from controller
+    uint32_t      mAmpStatus;               // Amplifier status
+    prmConfigurationJoint m_config_j;       // Joint configuration
+    prmStateJoint m_measured_js;            // Measured joint state (CRTK)
+    prmStateJoint m_setpoint_js;            // Setpoint joint state (CRTK)
+    prmOperatingState m_op_state;           // Operating state (CRTK)
+    prmActuatorState mActuatorState;        // Actuator state
+    vctUIntVec    mAxisToGalilChannelMap;   // Map from axis index to Galil channel
+    vctUIntVec    mGalilChannelToAxisMap;   // Map from Galil channel to axis index
+    vctDoubleVec  mEncoderCountsPerUnit;    // Encoder conversion factors
+    vctUShortVec  mAxisStatus;              // Axis status
+    vctUCharVec   mStopCode;                // Axis stop code (see Galil SC command)
+    vctUCharVec   mSwitches;                // Axis switches (see Galil TS command)
+    vctUShortVec  mAnalogIn;                // Axis analog input
+    bool          mMotorPowerOn;            // Whether motor power is on (for all configured motors)
+    bool          mMotionActive;            // Whether a motion is active
+    mtsInterfaceProvided *mInterface;       // Provided interface
+
+ public:
+
+    mtsGalilController(const std::string &name, unsigned int sizeStateTable = 1024, bool newThread = true);
+    mtsGalilController(const mtsTaskContinuousConstructorArg &arg);
 
     ~mtsGalilController();
 
-    // CISST MultiTask functions
+    enum { GALIL_MAX_AXES = 8 };
+
+    // cisstMultiTask functions
     void Configure(const std::string &fileName) override;
     void Startup(void) override;
     void Run(void) override;
     void Cleanup(void) override;
 
-    // Galil Controller Functions
-    void GetConnected(bool &val) const { val = (m_Galil != 0); }
+protected:
 
-    void SetTimeout(const double &timeout, bool &success);
+    // String of configured axes (e.g., "ABC")
+    char mGalilAxes[GALIL_MAX_AXES+1];
+    // Boolean array indicating which Galil indexes are valid
+    bool mGalilIndexValid[GALIL_MAX_AXES];
 
-    inline void WaitMotion(const vctBoolVec &mask) { WaitMotion(mask, m_timeout); }
-    inline void StopMovement(const vctBoolVec &mask) { StopMovement(mask, m_timeout); }
+    // Local static method to concatenate cmd (no more than 3 chars, including any spaces)
+    // and axes (no more than GALIL_MAX_AXES chars).
+    // Parameters:
+    //    cmd    Galil command string, including space if desired (e.g, "BG ")
+    //    axes   Galil axes string (e.g., "ABC")
+    // Example output: "BG ABC"
+    static char *GetCmdAxesBuffer(const char *cmd, const char *axes);
 
-    // Initialize (e.g., establish communications with the controller)
-    // and configure the robot.  Note that a configuration file name could
-    // be added as a parameter.
-    virtual void Close();
+    // Local static method to create cmd followed by comma-separated values
+    // Parameters:
+    //    cmd    Galil command string, including space if desired (e.g, "SP ")
+    //    data   Data values (indexed by Galil channel, so valid values may not be contiguous)
+    //    valid  Boolean array indicating which data values are valid
+    //    num    Size of data and valid arrays
+    // Example output: "SP 1000,,500"
+    static char *GetCmdValuesBuffer(const char *cmd, const int32_t *data, const bool *valid, unsigned int num);
 
-    // Enable/disable motor power for all axes
-    void EnableAllMotorPower();
-    void DisableAllMotorPower();
+    // Local method to create boolean array from vctBoolVec, also remapping from robot axis to Galil index
+    const bool *GetGalilIndexValid(const vctBoolVec &mask) const;
+    // Local method to create axes string for specified array of valid Galil indices
+    const char *GetGalilAxes(const bool *galilIndexValid) const;
 
-    // specify the axes.
-    void EnableMotorPower(const vctBoolVec &mask);
-    // turn power off to the motors, run stopmotion command first just in case
-    // otherwise it is not possible to turn off motors when running?
-    void DisableMotorPower(const vctBoolVec &mask);
+    void Init();
+    void Close();
 
-    // Stop robot motion (do not disable motor power)
-    void StopMotionAll();
-    void StopMotion(const vctBoolVec &mask);
+    void SetupInterfaces();
 
-    // the mask is used as command mask, where bool=true homes that axes in the vector
-    void Home(const vctBoolVec &mask);
-    void UnHome(const vctBoolVec &mask);
+    void GetNumAxes(unsigned int &numAxes) const { numAxes = mNumAxes; }
+    void GetHeader(uint32_t &header) const { header = mHeader; }
+    void GetConnected(bool &val) const { val = (mGalil != 0); }
+
+    void SendCommand(const std::string& cmdString);
+    void SendCommandRet(const std::string& cmdString, std::string &retString);
+
+    // Enable motor power
+    void EnableMotorPower(void);
+    // Disable motor power
+    void DisableMotorPower(void);
 
     // Abort robot command
     void AbortProgram();
     void AbortMotion();
 
-    // Reset robot, don't use this too often
-    void Reset();
+    // Common method for sending command to Galil
+    bool galil_cmd_common(const char *cmdName, const char *cmdGalil, const vctDoubleVec &goal,
+                          const vctDoubleVec &conv);
 
-    //////---- Getters for most of the actuator state   -----//////
-    // This returns the state of the actuators and the controller
-    // the way this is implemented only works on 1800 level controllers
-    //*** Position feedback (all positions are in counts and are relative to
-    //     the robot world coordinate system, unless specified otherwise)
-    //*** Motion parameters, speeds are in counts/sec, accelerations/decelerations are
-    //     in counts/sec**2
-    void GetActuatorState(prmActuatorState &state);
+    // Move joint to specified position
+    void servo_jp(const prmPositionJointSet &jtpos);
+    // Move joint to specified relative position
+    void servo_jr(const prmPositionJointSet &jtpos);
+    // Move joint at specified velocity
+    void servo_jv(const prmVelocityJointSet &jtvel);
+    // Hold joint at current position (Stop)
+    void hold(void);
 
-    void GetAnalogInputs(vctDoubleVec &ain) const;
-    // Disha-encoder
-    void GetToolZEncoder(int &toolZencoder) const;
+    // Get joint configuration
+    void GetConfig_js(prmConfigurationJoint &cfg_j) const
+    { cfg_j = m_config_j; }
 
-    // The expected  values are in counts.
-    // Set the desired motion goals.
-    // this sets the desired actuator goal, also sets the velocity
-    void SetPositionMove(const prmMaskedDoubleVec &goalPosition);
+    // TEMP: following is to be able to use prmStateRobotQtWidgetComponent
+    void measured_cp(prmPositionCartesianGet &pos) const
+    { pos = prmPositionCartesianGet(); }
 
-    // this sets the velocity rather then position
-    void SetVelocityMove(const prmMaskedDoubleVec &goalVelocity);
+    // Set speed, acceleration and deceleration
+    void SetSpeed(const vctDoubleVec &spd);
+    void SetAccel(const vctDoubleVec &accel);
+    void SetDecel(const vctDoubleVec &decel);
 
-    // Set the parameters used in motion commands.
-    // The velocity is used in position moves
+    // Home: mask indicates which axes to home
+    void Home(const vctBoolVec &mask);
+    void UnHome(const vctBoolVec &mask);
 
-    // both of the following are used in position and move requests.
-    void SetSpeed(const prmMaskedDoubleVec &speed);
-    void SetAcceleration(const prmMaskedDoubleVec &acceleration);
-    void SetDeceleration(const prmMaskedDoubleVec &deceleration);
-
-    // this is used to set the reference position, or reset the absolute position
-    // it unsets the home variable at the same time.
-    void SetAbsolutePosition(const prmMaskedDoubleVec &position);
-
-    //*** Other functions:
-    // Wait for all motion to be complete, with a timeout in seconds.
-    void StopMovement(const vctBoolVec &mask, double timeout = 60);
-    // Wait for all motion to be complete, with a timeout in seconds.
-    void WaitMotion(const vctBoolVec &mask, double timeout = 60);
-
-    //*** Low-level functions that have been made public for use with the IRE:
-    // Send command to Galil controller and return pointer to response buffer.
-    inline void SendCommand(const std::string& cmd) { SendCommandString(cmd); }
-    inline void SendCommandRet(const std::string& cmd, std::string &ret) { ret = SendCommandString(cmd); }
-    std::string SendCommandString(const std::string& cmd);
-    /* Sends a command knowing that the return value will be a int */
-    int         SendCommandInt(const std::string& cmd);
-    /* Sends a command knowing that the return value will be a double */
-    double      SendCommandDouble(const std::string& cmd);
-
-    void ProgramUploadFile(const std::string &filepath);
-
-    enum MotionMode
-    {
-        MICROMOTIONMODE,
-        MACROMOTIONMODE,
-        SMOOTHMOTIONMODE
-    };
-
-    // change the pid parameters by loading different
-    void GetMotionMode(unsigned int &mode) const { mode = m_MotionMode; }
-    void SetMotionMode(const unsigned int &mode) { m_MotionMode = mode; }
-
-    // Method to record values via QR/DR packets
-    enum DataRecordMethod
-    {
-        QR,
-        DR
-    };
-    GDataRecord RecordData(const DataRecordMethod &method = DataRecordMethod::QR);
-
-    vctDoubleVec GetEncoderCountConversionFactors() const { return m_EncoderCountsPerUnit; }
-    void SetEncoderCountConversionFactors(const vctDoubleVec &conversionFactors)
-    {
-        assert(conversionFactors.size() == m_EncoderCountsPerUnit.size());
-        m_EncoderCountsPerUnit = conversionFactors;
-    }
-    void SetEncoderCountConversionFactors(const prmMaskedDoubleVec &conversionFactors);
-
-    prmMaskedIntVec    ConvertAxisUnitToEncoderCountsRounded(const prmMaskedDoubleVec &axisUnits) const;
-    vctIntVec          ConvertAxisUnitToEncoderCountsRounded(const vctDoubleVec &axisUnits) const
-    {
-        return ConvertAxisUnitToEncoderCountsRounded(prmMaskedDoubleVec(axisUnits, vctBoolVec(axisUnits.size(), true))).Data();
-    }
-    prmMaskedDoubleVec ConvertAxisUnitToEncoderCounts(const prmMaskedDoubleVec &axisUnits) const; 
-    vctDoubleVec       ConvertAxisUnitToEncoderCounts(const vctDoubleVec &axisUnits) const
-    {
-        return ConvertAxisUnitToEncoderCounts(prmMaskedDoubleVec(axisUnits, vctBoolVec(axisUnits.size(), true))).Data();
-    }
-    
-    prmMaskedDoubleVec ConvertEncoderCountsToAxisUnit(const prmMaskedDoubleVec &encoderCounts) const;
-    prmMaskedDoubleVec ConvertEncoderCountsToAxisUnit(const prmMaskedIntVec &encoderCounts) const;
-    vctDoubleVec       ConvertEncoderCountsToAxisUnit(const vctDoubleVec &encoderCounts) const 
-    {
-        return ConvertEncoderCountsToAxisUnit(prmMaskedDoubleVec(encoderCounts, vctBoolVec(encoderCounts.size(), true))).Data();
-    }
-    vctDoubleVec       ConvertEncoderCountsToAxisUnit(const vctIntVec &encoderCounts) const 
-    {
-        return ConvertEncoderCountsToAxisUnit(prmMaskedIntVec(encoderCounts, vctBoolVec(encoderCounts.size(), true))).Data();
-    }
-
-protected:
-    void Init(void);
-    void SetupInterfaces(void);
-
-    // Double format. TK1.3,2.3,233.2323,,233.2,
-    void CreateCommand(char *buffer, const char *galilCmd, const vctBoolVec &mask, const vctDoubleVec &cmdParam);
-    // prints in Long format. PT1,2,233,,23,
-    void CreateCommandLong(char *buffer, const char *galilCmd, const vctBoolVec &mask, const vctDoubleVec &cmdParam);
-    // If the mask is empty (all masks=false) then command will apply to all axes!
-    // This is the default behavior for Galil controller commands.
-    // use this to set any variable (doubles are converted to long if needed automatically)
-    void CreateCommandForAxis(char *buffer, const char *galilCmd, const vctBoolVec &mask);
-
-    // converts commanded values to the actual galil controller mappings
-    inline size_t GetNumberActuators() { return m_AxisToGalilChannelMappings.size(); }
-    unsigned int RemapAxisIndex(const unsigned int index);
-    unsigned int RemapGalilIndex(const unsigned int index, bool& valid);
-    vctBoolVec RemapAxisMask(const vctBoolVec& axisMask);
-    template <typename T> prmMaskedVector<T> RemapAxisValues(const vctDynamicVector<T>& axisValues);
-    template <typename T> prmMaskedVector<T> RemapAxisValues(const prmMaskedVector<T>& axisValues);
-
-    // Galil Controller containers
-    //helper command variables in accessing data record elements
-    std::vector <std::string> TP; // pos
-    std::vector <std::string> TV; // vel (filtered) counts/sec
-    std::vector <std::string> BG; // axis moving
-    std::vector <std::string> HM; // home
-    std::vector <std::string> LF; // for limit
-    std::vector <std::string> LR; // rev limit
-    std::vector <std::string> MO; // Motor off
-    std::vector <std::string> SC; // stop code
-    std::vector <std::string> ZA; // user variable   can be used to store state of home
-    std::vector <std::string> AN; // Analog input 1 per axis
-
-    // Disha-encoder
-    std::vector<std::string> DI;
-
-    // Component fields
-    mtsStateTable m_StateTable;
-    prmActuatorState m_ActuatorState;
-
-    float m_timeout = 60.0 * cmn_s;
-
-private:
-    static inline void CheckErrorGCommand(GReturn rc) { if (rc != G_NO_ERROR) throw rc; }
-
-    void ConnectToGalilController(const std::string& deviceName);
-
-    //////----- Motion commands   -----//////
-    //  (all positions are in COUNTS and are relative to the ACTUATOR HOME position).
-    // All the mtsVectors are going to be the size of the MAX_
-    vctBoolVec   m_IsHomed;  // TRUE if actuator IsHomed
-    vctDoubleVec m_AnalogInput;
-
-    // Disha-encoder
-    vctIntVec        m_DigitalInput;
-    cmnInt           m_DecPosition;
-    cmnUInt          m_MotionMode; //indicates the type of config file loaded;
-    vctDoubleVec     m_EncoderCountsPerUnit; // The encoder counts per unit (m, mm, rads, revolutions, etc.)
-    vctUIntVec       m_AxisToGalilChannelMappings;
-    prmMaskedUIntVec m_GalilToAxisChannelMappings;
-
-    // galil controller class handle
-    GCon         m_Galil;
-    std::string  m_DeviceName;
-
-    // DMC program to download to Galil on startup
-    std::string   mDmcFile;
-
-    // internal variable used to calculate velocity times.
-    double            m_ServoLoopTime;
-    double            m_TMVelocityMultiplier;
-    GDataRecord       m_dataRecord;
-
-    // internal is moving state
-    vctBoolVec m_SoftRevLimitHit;
-    vctBoolVec m_SoftFwdLimitHit;
-    size_t     m_NumberEncoderPins;
-
+    // Set absolute position (e.g., for homing)
+    void SetAbsolutePosition(const vctDoubleVec &pos);
 };
 
 CMN_DECLARE_SERVICES_INSTANTIATION(mtsGalilController)

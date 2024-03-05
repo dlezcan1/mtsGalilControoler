@@ -58,11 +58,9 @@ if (cisst_FOUND_AS_REQUIRED)
 
     set (sawGalilController_HEADER_FILES
       "${sawGalilController_HEADER_DIR}/mtsGalilController.h"
-      "${sawGalilController_HEADER_DIR}/mtsGalilControllerDR.h"
       "${sawGalilController_HEADER_DIR}/sawGalilControllerExport.h")
     set (sawGalilController_SOURCE_FILES
-      code/mtsGalilController.cpp
-      code/mtsGalilControllerDR.cpp)
+      code/mtsGalilController.cpp)
 
     add_library (
       sawGalilController

@@ -23,7 +23,7 @@ http://www.cisst.org/cisst/license.txt.
 #include <cisstMultiTask/mtsTaskManager.h>
 #include <cisstMultiTask/mtsSystemQtWidget.h>
 
-#include <sawGalilController/mtsGalilControllerDR.h>
+#include <sawGalilController/mtsGalilController.h>
 
 #include <QApplication>
 #include <QMainWindow>
@@ -74,7 +74,7 @@ int main(int argc, char * argv[])
     std::cout << "Options provided:" << std::endl << arguments << std::endl;
 
     // create the components
-    mtsGalilControllerDR * galilController = new mtsGalilControllerDR("GalilController");
+    mtsGalilController * galilController = new mtsGalilController("GalilController");
     galilController->Configure(jsonConfigFile);
 
     // add the components to the component manager

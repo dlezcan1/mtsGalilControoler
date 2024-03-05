@@ -24,7 +24,7 @@ http://www.cisst.org/cisst/license.txt.
 #include <cisstMultiTask/mtsSystemQtWidget.h>
 #include <cisstParameterTypes/prmStateRobotQtWidget.h>
 
-#include <sawGalilController/mtsGalilControllerDR.h>
+#include <sawGalilController/mtsGalilController.h>
 
 #include <QApplication>
 #include <QMainWindow>
@@ -57,7 +57,7 @@ int main(int argc, char * argv[])
     }
 
     // create the components
-    mtsGalilControllerDR * galilController = new mtsGalilControllerDR("GalilController");
+    mtsGalilController * galilController = new mtsGalilController("GalilController");
     galilController->Configure(jsonConfigFile);
 
     // add the components to the component manager
