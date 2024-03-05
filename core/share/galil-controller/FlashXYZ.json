@@ -1,0 +1,26 @@
+// XYZ Stages for FLASH system, using Galil DMC-4143
+// Pittman 14204S005 motor: 24V, max continuous current: 3.7A
+//                          torque const: 8.67 oz-in/A
+// Dover XYR-6060: 100mm x 100mm, 2mm lead-screw, encoder with 2000 or 4000 counts/rev
+//    Original SARRP had 1000 counts/mm, so probably 2000 counts/rev
+//    1000 counts/mm --> 1000000 counts/m
+{
+    "FileVersion": 1,
+    "IP_Address": "169.254.0.51",
+    "Galil_Direct": 1,
+    "DMC_Startup_Program": "FlashXYZ.dmc",
+    "Axes": [
+        {
+            "Galil_Channel": 0,
+            "Encoder_Conversion": 0.001
+        },
+        {
+            "Galil_Channel": 1,
+            "Encoder_Conversion": 0.001
+        },
+        {
+            "Galil_Channel": 2,
+            "Encoder_Conversion": 0.001
+        }
+    ]
+}

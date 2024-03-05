@@ -13,6 +13,8 @@ http://www.cisst.org/cisst/license.txt.
 --- end cisst license ---
 */
 
+#include <string>
+
 #include <cisstCommon/cmnLogger.h>
 #include <cisstCommon/cmnKbHit.h>
 #include <cisstCommon/cmnGetChar.h>
@@ -229,9 +231,14 @@ public:
                     std::string cmdString;
                     std::string retString;
                     std::cout << std::endl << "Enter command: ";
-                    std::cin >> cmdString;
-                    SendCommandRet(cmdString, retString);
-                    std::cout << "Return: " << retString << std::endl;
+                    for (;;) {
+                        std::getline(std::cin, cmdString);
+                        if (!cmdString.empty()) {
+                            SendCommandRet(cmdString, retString);
+                            std::cout << "Return: " << retString << std::endl;
+                            break;
+                        }
+                    }
                 }
                 else {
                     std::cout << std::endl << "Command not available - Galil not connected" << std::endl;

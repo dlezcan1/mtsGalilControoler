@@ -380,7 +380,13 @@ void mtsGalilControllerDR::Startup()
     // Upload a DMC program file if available
     if (!mDmcFile.empty()) {
         if (cmnPath::Exists(mDmcFile)) {
-            GProgramUploadFile(mGalil, mDmcFile.c_str());
+            CMN_LOG_CLASS_INIT_VERBOSE << "Downloading " << mDmcFile << " to Galil controller" << std::endl;
+            if (GProgramDownloadFile(mGalil, mDmcFile.c_str(), 0) == G_NO_ERROR) {
+                SendCommand("XQ");  // Execute downloaded program
+            }
+            else {
+                CMN_LOG_CLASS_INIT_ERROR << "Configure: Error downloading DMC program file" << std::endl;
+            }
         }
         else {
             CMN_LOG_CLASS_INIT_ERROR << "Configure: DMC program file \""
@@ -566,6 +572,8 @@ void mtsGalilControllerDR::EnableMotorPower(void)
 // Disable motor power
 void mtsGalilControllerDR::DisableMotorPower(void)
 {
+    if (mMotionActive)
+        SendCommand(GetCmdAxesBuffer("ST ", mGalilAxes));
     SendCommand(GetCmdAxesBuffer("MO ", mGalilAxes));
 }
 
