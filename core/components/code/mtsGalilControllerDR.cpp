@@ -282,8 +282,8 @@ void mtsGalilControllerDR::Configure(const std::string& fileName)
     m_config_j.Type().SetSize(mNumAxes);
     // We have position and velocity for measured_js
     m_measured_js.Name().SetSize(mNumAxes);
-    m_setpoint_js.Position().SetSize(mNumAxes);
-    m_setpoint_js.Velocity().SetSize(mNumAxes);
+    m_measured_js.Position().SetSize(mNumAxes);
+    m_measured_js.Velocity().SetSize(mNumAxes);
     m_measured_js.Position().SetAll(0.0);
     m_measured_js.Velocity().SetAll(0.0);
     // We have position and effort for setpoint_js
@@ -291,7 +291,7 @@ void mtsGalilControllerDR::Configure(const std::string& fileName)
     m_setpoint_js.Position().SetSize(mNumAxes);
     m_setpoint_js.Effort().SetSize(mNumAxes);
     m_setpoint_js.Position().SetAll(0.);
-    m_measured_js.Effort().SetAll(0.0);
+    m_setpoint_js.Effort().SetAll(0.0);
 
     mActuatorState.SetSize(mNumAxes);
     mActuatorState.Position().SetAll(0.0);

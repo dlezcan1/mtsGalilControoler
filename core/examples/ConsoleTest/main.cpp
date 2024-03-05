@@ -39,6 +39,7 @@ private:
 
 #ifdef USE_DR
     prmStateJoint m_measured_js;
+    prmStateJoint m_setpoint_js;
     prmPositionJointSet jtposSet;
     prmVelocityJointSet jtvelSet;
     prmOperatingState m_op_state;
@@ -174,6 +175,7 @@ public:
         if (galilOK) {
 #ifdef USE_DR
             measured_js(m_measured_js);
+            setpoint_js(m_setpoint_js);
             m_measured_js.GetPosition(jtpos);
             operating_state(m_op_state);
 #else
@@ -315,7 +317,7 @@ public:
 #ifdef USE_DR
             printf("] TORQUE: [");
             vctDoubleVec jtt;
-            m_measured_js.GetEffort(jtt);
+            m_setpoint_js.GetEffort(jtt);
             for (i = 0; i < jtt.size(); i++)
                 printf(" %7.2lf ", jtt[i]);
 #endif
