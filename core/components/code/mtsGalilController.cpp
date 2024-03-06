@@ -112,7 +112,14 @@ const unsigned int ErrorCodeOffset[NUM_MODELS] = {   50,    50,    46,    26,   
 // Byte offset to amplifier status (-1 means not available)
 const int AmpStatusOffset[NUM_MODELS]          = {   52,    52,    -1,    -1,    -1,    18 };
 
-CMN_IMPLEMENT_SERVICES_DERIVED_ONEARG(mtsGalilController, mtsTaskContinuous, mtsTaskContinuousConstructorArg)
+CMN_IMPLEMENT_SERVICES_DERIVED_ONEARG(mtsGalilController, mtsTaskContinuous, mtsStdString)
+
+mtsGalilController::mtsGalilController(const std::string &name) :
+    mtsTaskContinuous(name, 1024, true), mGalil(0), mHeader(0), mAmpStatus(0),
+    mMotorPowerOn(false), mMotionActive(false)
+{
+    Init();
+}
 
 mtsGalilController::mtsGalilController(const std::string &name, unsigned int sizeStateTable, bool newThread) :
     mtsTaskContinuous(name, sizeStateTable, newThread), mGalil(0), mHeader(0), mAmpStatus(0),

@@ -51,7 +51,8 @@ class CISST_EXPORT mtsGalilController : public mtsTaskContinuous
 
  public:
 
-    mtsGalilController(const std::string &name, unsigned int sizeStateTable = 1024, bool newThread = true);
+    mtsGalilController(const std::string &name);
+    mtsGalilController(const std::string &name, unsigned int sizeStateTable, bool newThread = true);
     mtsGalilController(const mtsTaskContinuousConstructorArg &arg);
 
     ~mtsGalilController();
