@@ -49,6 +49,23 @@ class CISST_EXPORT mtsGalilController : public mtsTaskContinuous
 {
     CMN_DECLARE_SERVICES(CMN_DYNAMIC_CREATION_ONEARG, CMN_LOG_LOD_RUN_ERROR)
 
+ public:
+
+    mtsGalilController(const std::string &name, unsigned int sizeStateTable = 1024, bool newThread = true);
+    mtsGalilController(const mtsTaskContinuousConstructorArg &arg);
+
+    ~mtsGalilController();
+
+    enum { GALIL_MAX_AXES = 8 };
+
+    // cisstMultiTask functions
+    void Configure(const std::string &fileName) override;
+    void Startup(void) override;
+    void Run(void) override;
+    void Cleanup(void) override;
+
+protected:
+
     void         *mGalil;                   // Gcon
     std::string   mDeviceName;              // IP address
     bool          mDirectMode;              // Direct connection (not using gcaps)
@@ -75,46 +92,38 @@ class CISST_EXPORT mtsGalilController : public mtsTaskContinuous
     vctUShortVec  mAnalogIn;                // Axis analog input
     bool          mMotorPowerOn;            // Whether motor power is on (for all configured motors)
     bool          mMotionActive;            // Whether a motion is active
+    vctDoubleVec  mSpeedDefault;            // Default speed
+    vctDoubleVec  mSpeed;                   // Current speed
+    vctDoubleVec  mAccelDefault;            // Default accel
+    vctDoubleVec  mAccel;                   // Current accel
+    vctDoubleVec  mDecelDefault;            // Default decel
+    vctDoubleVec  mDecel;                   // Current decel
     mtsInterfaceProvided *mInterface;       // Provided interface
-
- public:
-
-    mtsGalilController(const std::string &name, unsigned int sizeStateTable = 1024, bool newThread = true);
-    mtsGalilController(const mtsTaskContinuousConstructorArg &arg);
-
-    ~mtsGalilController();
-
-    enum { GALIL_MAX_AXES = 8 };
-
-    // cisstMultiTask functions
-    void Configure(const std::string &fileName) override;
-    void Startup(void) override;
-    void Run(void) override;
-    void Cleanup(void) override;
-
-protected:
 
     // String of configured axes (e.g., "ABC")
     char mGalilAxes[GALIL_MAX_AXES+1];
     // Boolean array indicating which Galil indexes are valid
     bool mGalilIndexValid[GALIL_MAX_AXES];
 
-    // Local static method to concatenate cmd (no more than 3 chars, including any spaces)
-    // and axes (no more than GALIL_MAX_AXES chars).
+    char *mBuffer;                          // Local buffer for building command strings
+
+    // Local static method to write cmd and axes to buffer
     // Parameters:
+    //    buf    Buffer for output
     //    cmd    Galil command string, including space if desired (e.g, "BG ")
     //    axes   Galil axes string (e.g., "ABC")
     // Example output: "BG ABC"
-    static char *GetCmdAxesBuffer(const char *cmd, const char *axes);
+    static char *WriteCmdAxes(char *buf, const char *cmd, const char *axes);
 
     // Local static method to create cmd followed by comma-separated values
     // Parameters:
+    //    buf    Buffer for output
     //    cmd    Galil command string, including space if desired (e.g, "SP ")
     //    data   Data values (indexed by Galil channel, so valid values may not be contiguous)
     //    valid  Boolean array indicating which data values are valid
     //    num    Size of data and valid arrays
     // Example output: "SP 1000,,500"
-    static char *GetCmdValuesBuffer(const char *cmd, const int32_t *data, const bool *valid, unsigned int num);
+    static char *WriteCmdValues(char *buf, const char *cmd, const int32_t *data, const bool *valid, unsigned int num);
 
     // Local method to create boolean array from vctBoolVec, also remapping from robot axis to Galil index
     const bool *GetGalilIndexValid(const vctBoolVec &mask) const;

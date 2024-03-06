@@ -63,6 +63,12 @@ private:
     mtsFunctionRead get_analog;
     mtsFunctionRead GetActuatorState;
 
+    void OnStatusEvent(const mtsMessage &msg) {
+        std::cout << std::endl << "Status: " << msg.Message << std::endl;
+    }
+    void OnWarningEvent(const mtsMessage &msg) {
+        std::cout << std::endl << "Warning: " << msg.Message << std::endl;
+    }
     void OnErrorEvent(const mtsMessage &msg) {
         std::cout << std::endl << "Error: " << msg.Message << std::endl;
     }
@@ -93,6 +99,8 @@ public:
             req->AddFunction("GetSwitches", get_switches);
             req->AddFunction("GetAnalogInput", get_analog);
             req->AddFunction("GetActuatorState", GetActuatorState);
+            req->AddEventHandlerWrite(&GalilClient::OnStatusEvent, this, "status");
+            req->AddEventHandlerWrite(&GalilClient::OnWarningEvent, this, "warning");
             req->AddEventHandlerWrite(&GalilClient::OnErrorEvent, this, "error");
         }
     }
@@ -110,7 +118,7 @@ public:
                   << "  h: display help information" << std::endl
                   << "  e: enable motor power" << std::endl
                   << "  n: disable motor power" << std::endl
-                  << "  a: get analog input" << std::endl
+                  << "  a: get actuator state" << std::endl
                   << "  o: get operating state" << std::endl
                   << "  i: display header info" << std::endl
                   << "  q: quit" << std::endl;
@@ -144,7 +152,6 @@ public:
             setpoint_js(m_setpoint_js);
             m_measured_js.GetPosition(jtpos);
             operating_state(m_op_state);
-            // GetActuatorState(m_ActuatorState);
         }
 
         char c = 0;
@@ -219,11 +226,8 @@ public:
                 break;
 
             case 'a':
-                {
-                    vctUShortVec analog_in;
-                    get_analog(analog_in);
-                    std::cout << std::endl << "Analog input: " << analog_in << std::endl;
-                }
+                GetActuatorState(m_ActuatorState);
+                std::cout << std::endl << "ActuatorState: " << std::endl << m_ActuatorState << std::endl;
                 break;
 
             case 'o':
@@ -239,7 +243,9 @@ public:
                 break;
 
             case 'q':   // quit program
-                std::cout << "Exiting.. " << std::endl;
+                std::cout << std::endl << "Exiting.. " << std::endl;
+                hold();              // Stop moving
+                crtk_disable();      // Disable motor power
                 this->Kill();
                 break;
 
@@ -301,7 +307,8 @@ int main(int argc, char **argv)
     cmnLogger::SetMask(CMN_LOG_ALLOW_ALL);
     cmnLogger::SetMaskDefaultLog(CMN_LOG_ALLOW_ALL);
     cmnLogger::SetMaskFunction(CMN_LOG_ALLOW_ALL);
-    cmnLogger::AddChannel(std::cout, CMN_LOG_ALLOW_ERRORS_AND_WARNINGS);
+    // Using SendStatus, SendWarning and SendError instead
+    // cmnLogger::AddChannel(std::cout, CMN_LOG_ALLOW_ERRORS_AND_WARNINGS);
 
     if (argc < 2) {
         std::cout << "Syntax: sawGalilConsole <config>" << std::endl;

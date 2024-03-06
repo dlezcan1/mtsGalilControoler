@@ -130,12 +130,14 @@ mtsGalilController::mtsGalilController(const mtsTaskContinuousConstructorArg & a
 mtsGalilController::~mtsGalilController()
 {
     Close();
+    delete [] mBuffer;
 }
 
 void mtsGalilController::Init(void)
 {
     // Call SetupInterfaces after Configure, for reasons documented below
     // (see comment at end of Configure method).
+    mBuffer = new char[G_SMALL_BUFFER];
 }
 
 void mtsGalilController::SetupInterfaces(void)
@@ -151,6 +153,9 @@ void mtsGalilController::SetupInterfaces(void)
     StateTable.AddData(mSwitches, "switches");
     StateTable.AddData(mAnalogIn, "analog_in");
     StateTable.AddData(mActuatorState, "actuator_state");
+    StateTable.AddData(mSpeed, "speed");
+    StateTable.AddData(mAccel, "accel");
+    StateTable.AddData(mDecel, "decel");
 
     mInterface = AddInterfaceProvided("control");
     if (mInterface) {
@@ -194,6 +199,9 @@ void mtsGalilController::SetupInterfaces(void)
         mInterface->AddCommandWrite(&mtsGalilController::UnHome, this, "UnHome");
         mInterface->AddCommandWrite(&mtsGalilController::SetAbsolutePosition, this, "SetAbsolutePosition");
         mInterface->AddCommandReadState(this->StateTable, mActuatorState, "GetActuatorState");
+        mInterface->AddCommandReadState(this->StateTable, mSpeed, "GetSpeed");
+        mInterface->AddCommandReadState(this->StateTable, mAccel, "GetAccel");
+        mInterface->AddCommandReadState(this->StateTable, mDecel, "GetDecel");
         // Low-level axis data for testing
         mInterface->AddCommandReadState(this->StateTable, mAxisStatus, "GetAxisStatus");
         mInterface->AddCommandReadState(this->StateTable, mStopCode, "GetStopCode");
@@ -306,6 +314,13 @@ void mtsGalilController::Configure(const std::string& fileName)
     mSwitches.SetSize(mNumAxes);
     mAnalogIn.SetSize(mNumAxes);
 
+    mSpeed.SetSize(mNumAxes);
+    mSpeedDefault.SetSize(mNumAxes);
+    mAccel.SetSize(mNumAxes);
+    mAccelDefault.SetSize(mNumAxes);
+    mDecel.SetSize(mNumAxes);
+    mDecelDefault.SetSize(mNumAxes);
+
     mGalilIndexMax = 0;
     for (i = 0; i < GALIL_MAX_AXES; i++)
         mGalilIndexValid[i] = false;
@@ -350,6 +365,11 @@ void mtsGalilController::Configure(const std::string& fileName)
     }
     mGalilAxes[k] = 0;           // NULL termination
 
+    // Default values should be read from JSON file
+    mSpeedDefault.SetAll(0.025);   // 25 mm/s
+    mAccelDefault.SetAll(0.256);   // 256 mm/s^2
+    mDecelDefault.SetAll(0.256);   // 256 mm/s^2
+
     // Galil Startup Program
     if (jsonConfig.isMember("DMC_Startup_Program")) {
         mDmcFile = jsonConfig["DMC_Startup_Program"].asString();
@@ -393,6 +413,12 @@ void mtsGalilController::Startup()
                                      << mDmcFile << "\" not found" << std::endl;
         }
     }
+
+    // Set default speed, accel, decel
+    SetSpeed(mSpeedDefault);
+    SetAccel(mAccelDefault);
+    SetDecel(mDecelDefault);
+
     ret = GRecordRate(mGalil, mDR_Period_ms);
     if (ret != G_NO_ERROR) {
         CMN_LOG_CLASS_INIT_ERROR << "Galil GRecordRate: error " << ret << " setting rate to "
@@ -451,6 +477,19 @@ void mtsGalilController::Run()
                 mActuatorState.MotorOff()[i] = mAxisStatus[i] & StatusMotorOff;
                 mActuatorState.SoftFwdLimitHit()[i] = (mStopCode[i] == 2);
                 mActuatorState.SoftRevLimitHit()[i] = (mStopCode[i] == 3);
+                // NOTE: FwdLimit, RevLimit and Home are affected by the CN command:
+                //   CN -1   (default) --> limit switches are active low (default)
+                //   CN ,-1  (default) --> home value is based on input voltage (GND --> 0)
+                //   CN ,1             --> home value is inverted input voltage (GND --> 1)
+                //
+                // In either case ("CN ,-1" or "CN ,1"):
+                //   - motor homes in reverse direction when home value is 1
+                //   - motor homes in forward direction when home value is 0
+                //
+                // In a typical setup, the limit switches have pull-up resistors, so the
+                // active state is low (CN -1).
+                // For the home switch, setting CN -1 is appropriate if the home switch is
+                // tied to the (active low) reverse limit.
                 mActuatorState.HardFwdLimitHit()[i] = mSwitches[i] & SwitchFwdLimit;
                 mActuatorState.HardRevLimitHit()[i] = mSwitches[i] & SwitchRevLimit;
                 mActuatorState.HomeSwitchOn()[i]    = mSwitches[i] & SwitchHome;
@@ -505,36 +544,32 @@ void mtsGalilController::Cleanup(){
 }
 
 // Returns command, followed by list of axes (e.g., "BG ABC")
-char *mtsGalilController::GetCmdAxesBuffer(const char *cmd, const char *axes)
+char *mtsGalilController::WriteCmdAxes(char *buf, const char *cmd, const char *axes)
 {
-    static char buf[3+GALIL_MAX_AXES+1];
-    CMN_ASSERT((strlen(cmd) <= 3) && (strlen(axes) <= GALIL_MAX_AXES));
     strcpy(buf, cmd);
     strcat(buf, axes);
     return buf;
 }
 
 // Returns command, followed by list of values (e.g., "SP 1000,,500")
-char *mtsGalilController::GetCmdValuesBuffer(const char *cmd, const int32_t *data, const bool *valid, unsigned int num)
+char *mtsGalilController::WriteCmdValues(char *buf, const char *cmd, const int32_t *data, const bool *valid, unsigned int num)
 {
-    static char Cmd_buffer[G_SMALL_BUFFER];
-
-    strcpy(Cmd_buffer, cmd);
-    size_t Cmd_len = strlen(Cmd_buffer);
+    strcpy(buf, cmd);
+    size_t len = strlen(buf);
     for (unsigned int i = 0; i < num; i++) {
         if (valid[i]) {
-            sprintf(Cmd_buffer+Cmd_len, "%ld,", data[i]);
-            Cmd_len = strlen(Cmd_buffer);
+            sprintf(buf+len, "%ld,", data[i]);
+            len = strlen(buf);
         }
         else {
-            Cmd_buffer[Cmd_len++] = ',';
-            Cmd_buffer[Cmd_len] = 0;
+            buf[len++] = ',';
+            buf[len] = 0;
         }
     }
     // Remove last comma
-    Cmd_buffer[Cmd_len-1] = 0;
+    buf[len-1] = 0;
 
-    return Cmd_buffer;
+    return buf;
 }
 
 void mtsGalilController::SendCommand(const std::string &cmdString)
@@ -542,7 +577,9 @@ void mtsGalilController::SendCommand(const std::string &cmdString)
     if (mGalil) {
         GReturn ret = GCmd(mGalil, cmdString.c_str());
         if (ret != G_NO_ERROR) {
-            CMN_LOG_CLASS_RUN_ERROR << "SendCommand: error " << ret << " sending " << cmdString << std::endl;
+            char buf[64];
+            sprintf(buf, "SendCommand: error %d sending ", ret);
+            mInterface->SendError(std::string(buf)+cmdString);
         }
     }
 }
@@ -558,7 +595,9 @@ void mtsGalilController::SendCommandRet(const std::string &cmdString, std::strin
         }
         else {
             retString.clear();
-            CMN_LOG_CLASS_RUN_ERROR << "SendCommandRet: error " << ret << " sending " << cmdString << std::endl;
+            char buf[64];
+            sprintf(buf, "SendCommandRet: error %d sending ", ret);
+            mInterface->SendError(std::string(buf)+cmdString);
         }
     }
 }
@@ -566,15 +605,20 @@ void mtsGalilController::SendCommandRet(const std::string &cmdString, std::strin
 // Enable motor power
 void mtsGalilController::EnableMotorPower(void)
 {
-    SendCommand(GetCmdAxesBuffer("SH ", mGalilAxes));
+    SendCommand(WriteCmdAxes(mBuffer, "SH ", mGalilAxes));
 }
 
 // Disable motor power
 void mtsGalilController::DisableMotorPower(void)
 {
-    if (mMotionActive)
-        SendCommand(GetCmdAxesBuffer("ST ", mGalilAxes));
-    SendCommand(GetCmdAxesBuffer("MO ", mGalilAxes));
+    // Sending both ST and MO does not seem to work. Adding AM
+    // in between does not seem to help either.
+    if (mMotionActive) {
+        SendCommand(WriteCmdAxes(mBuffer, "ST ", mGalilAxes));
+        // TEMP: set speed in case previous command was servo_jv
+        SetSpeed(mSpeed);
+    }
+    SendCommand(WriteCmdAxes(mBuffer, "MO ", mGalilAxes));
 }
 
 void mtsGalilController::AbortProgram()
@@ -607,53 +651,76 @@ bool mtsGalilController::galil_cmd_common(const char *cmdName, const char *cmdGa
         galilData[galilIndex] = static_cast<int32_t>(std::round(data[i]/conv[i]));
     }
 
-    SendCommand(GetCmdValuesBuffer(cmdGalil, galilData, mGalilIndexValid, mGalilIndexMax));
+    SendCommand(WriteCmdValues(mBuffer, cmdGalil, galilData, mGalilIndexValid, mGalilIndexMax));
     return true;
 }
 
 void mtsGalilController::servo_jp(const prmPositionJointSet &jtpos)
 {
+    if (!mMotorPowerOn) {
+        mInterface->SendError("servo_jp: motor power is off");
+        return;
+    }
     // Stop motion if active
     if (mMotionActive)
-        SendCommand(GetCmdAxesBuffer("ST ", mGalilAxes));
+        SendCommand(WriteCmdAxes(mBuffer, "ST ", mGalilAxes));
     if (galil_cmd_common("servo_jp", "PA ", jtpos.Goal(), mEncoderCountsPerUnit))
-        SendCommand(GetCmdAxesBuffer("BG ", mGalilAxes));
+        SendCommand(WriteCmdAxes(mBuffer, "BG ", mGalilAxes));
 }
 
 void mtsGalilController::servo_jr(const prmPositionJointSet &jtpos)
 {
+    if (!mMotorPowerOn) {
+        mInterface->SendError("servo_jr: motor power is off");
+        return;
+    }
     // Stop motion if active
     if (mMotionActive)
-        SendCommand(GetCmdAxesBuffer("ST ", mGalilAxes));
+        SendCommand(WriteCmdAxes(mBuffer, "ST ", mGalilAxes));
     if (galil_cmd_common("servo_jr", "PR ", jtpos.Goal(), mEncoderCountsPerUnit))
-        SendCommand(GetCmdAxesBuffer("BG ", mGalilAxes));
+        SendCommand(WriteCmdAxes(mBuffer, "BG ", mGalilAxes));
 }
 
 void mtsGalilController::servo_jv(const prmVelocityJointSet &jtvel)
 {
+    if (!mMotorPowerOn) {
+        mInterface->SendError("servo_jv: motor power is off");
+        return;
+    }
     // TODO: Only need to send BG after the first JG command
+    // Note that JG actually updates SP on the Galil, but for now we do not update
+    // mSpeed -- that allows us to restore the previous speed when we stop.
     if (galil_cmd_common("servo_jv", "JG ", jtvel.Goal(), mEncoderCountsPerUnit))
-        SendCommand(GetCmdAxesBuffer("BG ", mGalilAxes));
+        SendCommand(WriteCmdAxes(mBuffer, "BG ", mGalilAxes));
 }
 
 void mtsGalilController::hold(void)
 {
-    SendCommand(GetCmdAxesBuffer("ST ", mGalilAxes));
+    if (!mMotorPowerOn) {
+        mInterface->SendError("hold: motor power is off");
+        return;
+    }
+    SendCommand(WriteCmdAxes(mBuffer, "ST ", mGalilAxes));
+    // TEMP: set speed in case previous command was servo_jv
+    SetSpeed(mSpeed);
 }
 
 void mtsGalilController::SetSpeed(const vctDoubleVec &spd)
 {
-    galil_cmd_common("SetSpeed", "SP ", spd, mEncoderCountsPerUnit);
+    if (galil_cmd_common("SetSpeed", "SP ", spd, mEncoderCountsPerUnit))
+        mSpeed = spd;
 }
 
 void mtsGalilController::SetAccel(const vctDoubleVec &accel)
 {
-    galil_cmd_common("SetAccel", "AC ", accel, mEncoderCountsPerUnit);
+    if (galil_cmd_common("SetAccel", "AC ", accel, mEncoderCountsPerUnit))
+        mAccel = accel;
 }
 
 void mtsGalilController::SetDecel(const vctDoubleVec &decel)
 {
-    galil_cmd_common("SetDecel", "DC ", decel, mEncoderCountsPerUnit);
+    if (galil_cmd_common("SetDecel", "DC ", decel, mEncoderCountsPerUnit))
+        mDecel = decel;
 }
 
 const bool *mtsGalilController::GetGalilIndexValid(const vctBoolVec &mask) const
@@ -690,11 +757,12 @@ void mtsGalilController::Home(const vctBoolVec &mask)
     const bool *galilIndexValid = GetGalilIndexValid(mask);
     const char *galilAxes = GetGalilAxes(galilIndexValid);
 
-    CMN_LOG_CLASS_RUN_VERBOSE << "Home: " << mask << ", axes: " << galilAxes << std::endl;
+    sprintf(mBuffer, "Home: %s", galilAxes);
+    mInterface->SendStatus(mBuffer);
 
-    SendCommand(GetCmdAxesBuffer("ST ", galilAxes));
+    SendCommand(WriteCmdAxes(mBuffer, "ST ", galilAxes));
     SendCommand("HM");
-    SendCommand(GetCmdAxesBuffer("BG ", galilAxes));
+    SendCommand(WriteCmdAxes(mBuffer, "BG ", galilAxes));
     UnHome(mask);
 
     // TODO: Following needs to be in state machine
@@ -705,7 +773,7 @@ void mtsGalilController::Home(const vctBoolVec &mask)
     int32_t galilData[GALIL_MAX_AXES];
     for (unsigned int i = 0; i < mGalilIndexMax; i++)
         galilData[i] = 1;
-    SendCommand(GetCmdValuesBuffer("ZA ", galilData, galilIndexValid, mGalilIndexMax));
+    SendCommand(WriteCmdValues(mBuffer, "ZA ", galilData, galilIndexValid, mGalilIndexMax));
 }
 
 void mtsGalilController::UnHome(const vctBoolVec &mask)
@@ -714,7 +782,7 @@ void mtsGalilController::UnHome(const vctBoolVec &mask)
     int32_t galilData[GALIL_MAX_AXES];
     for (unsigned int i = 0; i < mGalilIndexMax; i++)
         galilData[i] = 0;
-    SendCommand(GetCmdValuesBuffer("ZA ", galilData, galilIndexValid, mGalilIndexMax));
+    SendCommand(WriteCmdValues(mBuffer, "ZA ", galilData, galilIndexValid, mGalilIndexMax));
 }
 
 void mtsGalilController::SetAbsolutePosition(const vctDoubleVec &pos)
