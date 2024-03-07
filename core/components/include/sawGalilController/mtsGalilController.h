@@ -134,6 +134,8 @@ protected:
     void Init();
     void Close();
 
+    static unsigned int GetModelIndex(unsigned int modelType);
+
     void SetupInterfaces();
 
     void GetNumAxes(unsigned int &numAxes) const { numAxes = mNumAxes; }
@@ -182,8 +184,9 @@ protected:
     void Home(const vctBoolVec &mask);
     void UnHome(const vctBoolVec &mask);
 
-    // Set absolute position (e.g., for homing)
-    void SetAbsolutePosition(const vctDoubleVec &pos);
+    // Set absolute position (e.g., for homing); also sets home flag
+    // (using ZA) on Galil controller
+    void SetHomePosition(const vctDoubleVec &pos);
 };
 
 CMN_DECLARE_SERVICES_INSTANTIATION(mtsGalilController)

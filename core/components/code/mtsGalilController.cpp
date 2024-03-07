@@ -66,7 +66,10 @@ struct AxisDataMax : public AxisDataMin {
 
 const uint16_t StatusMotorMoving     = 0x8000;
 const uint16_t StatusFindEdgeActive  = 0x1000;
-const uint16_t StatusFindIndexActive = 0x0200;
+const uint16_t StatusHomeActive      = 0x0800;
+const uint16_t StatusHome1Done       = 0x0400;
+const uint16_t StatusHome2DoneFI     = 0x0200;
+const uint16_t StatusHome3Active     = 0x0002;
 const uint16_t StatusMotorOff        = 0x0001;
 
 const uint8_t  SwitchFwdLimit        = 0x08;
@@ -204,7 +207,7 @@ void mtsGalilController::SetupInterfaces(void)
         mInterface->AddCommandWrite(&mtsGalilController::SetDecel, this, "SetDecel");
         mInterface->AddCommandWrite(&mtsGalilController::Home, this, "Home");
         mInterface->AddCommandWrite(&mtsGalilController::UnHome, this, "UnHome");
-        mInterface->AddCommandWrite(&mtsGalilController::SetAbsolutePosition, this, "SetAbsolutePosition");
+        mInterface->AddCommandWrite(&mtsGalilController::SetHomePosition, this, "SetHomePosition");
         mInterface->AddCommandReadState(this->StateTable, mActuatorState, "GetActuatorState");
         mInterface->AddCommandReadState(this->StateTable, mSpeed, "GetSpeed");
         mInterface->AddCommandReadState(this->StateTable, mAccel, "GetAccel");
@@ -223,6 +226,17 @@ void mtsGalilController::Close()
         GClose(mGalil);
         mGalil = 0;
     }
+}
+
+unsigned int mtsGalilController::GetModelIndex(unsigned int modelType)
+{
+    unsigned int i;
+    for (i = 0; i < NUM_MODELS; i++) {
+        if (modelType == ModelTypes[i]) {
+            break;
+        }
+    }
+    return i;
 }
 
 void mtsGalilController::Configure(const std::string& fileName)
@@ -263,20 +277,12 @@ void mtsGalilController::Configure(const std::string& fileName)
         CMN_LOG_CLASS_INIT_VERBOSE << "Configure: setting Galil direct mode" << std::endl;
     }
 
-    unsigned int modelType = jsonConfig.get("Galil_Model", 4000).asUInt();
-    unsigned int i;
-    for (i = 0; i < NUM_MODELS; i++) {
-        if (modelType == ModelTypes[i]) {
-            mModel = i;
-            break;
-        }
+    unsigned int modelType = jsonConfig.get("Galil_Model", 0).asUInt();
+    mModel = GetModelIndex(modelType);
+    if (mModel < NUM_MODELS) {
+        CMN_LOG_CLASS_INIT_VERBOSE << "Configure: setting Galil model to " << modelType
+                                   << " (index = " << mModel << ")" << std::endl;
     }
-    if (i == NUM_MODELS) {
-        CMN_LOG_CLASS_INIT_ERROR << "Configure: invalid Galil model type " << modelType << std::endl;
-        return;
-    }
-    CMN_LOG_CLASS_INIT_VERBOSE << "Configure: setting Galil model to " << modelType
-                               << " (index = " << mModel << ")" << std::endl;
 
     mDR_Period_ms = jsonConfig.get("DR_Period_ms", 2).asUInt();
     CMN_LOG_CLASS_INIT_VERBOSE << "Configure: setting DR period to " << mDR_Period_ms << " ms" << std::endl;
@@ -329,6 +335,7 @@ void mtsGalilController::Configure(const std::string& fileName)
     mDecelDefault.SetSize(mNumAxes);
 
     mGalilIndexMax = 0;
+    unsigned int i;
     for (i = 0; i < GALIL_MAX_AXES; i++)
         mGalilIndexValid[i] = false;
 
@@ -425,6 +432,55 @@ void mtsGalilController::Startup()
     SetSpeed(mSpeedDefault);
     SetAccel(mAccelDefault);
     SetDecel(mDecelDefault);
+
+    // Get controller type (^R^V)
+    if (GCmdT(mGalil, "\x12\x16", mBuffer, G_SMALL_BUFFER, 0) == G_NO_ERROR) {
+        mInterface->SendStatus("Galil Controller Revision: " + std::string(mBuffer));
+        unsigned int autoModel = 0;   // detected model type
+        const char *ptr = strstr(mBuffer, "DMC");
+        if (ptr) {
+            ptr += 3;   // Skip DMC
+            if ((ptr[0] == '4') || ((ptr[0] == '5') && (ptr[1] == '0')))
+                autoModel = 4000;    // 4000, 4200, 4103, and 500x0
+            else if ((ptr[0] == '5') && (ptr[1] == '2'))
+                autoModel = 52000;   // 52000
+            else if (ptr[0] == '3')
+                autoModel = 30000;   // 30010
+            else if (ptr[0] == '2')
+                autoModel = 2103;    // 30010
+            else if (strncmp(ptr, "1806", 4) == 0)
+                autoModel = 1806;    // 1806
+            else if (strncmp(ptr, "1802", 4) == 0)
+                autoModel = 1802;    // 1802
+        }
+        if (mModel >= NUM_MODELS) {
+            if (autoModel == 0) {
+                mInterface->SendError(this->GetName() + ": could not detect model type");
+                CMN_LOG_CLASS_INIT_ERROR << "Startup: Could not detect controller model, "
+                                         << "please specify in JSON file" << std::endl;
+                // Close connection so we do not hang waiting for data
+                Close();
+                return;
+            }
+            mModel = GetModelIndex(autoModel);
+            if (mModel < NUM_MODELS) {
+                CMN_LOG_CLASS_INIT_VERBOSE << "Startup: setting Galil model to " << autoModel
+                                           << " (index = " << mModel << ")" << std::endl;
+            }
+            else {
+                mInterface->SendError(this->GetName() + ": invalid model type");
+                // Close connection so we do not hang waiting for data
+                Close();
+                return;
+            }
+        }
+        else if ((autoModel != 0) && (GetModelIndex(autoModel) != mModel)) {
+            mInterface->SendWarning(this->GetName() + ": controller model mismatch (see log file)");
+            CMN_LOG_CLASS_INIT_WARNING << "Startup: detected controller model " << autoModel
+                                       << " differs from value specified in JSON file "
+                                       << ModelTypes[mModel] << std::endl;
+        }
+    }
 
     ret = GRecordRate(mGalil, mDR_Period_ms);
     if (ret != G_NO_ERROR) {
@@ -761,26 +817,21 @@ const char *mtsGalilController::GetGalilAxes(const bool *galilIndexValid) const
 
 void mtsGalilController::Home(const vctBoolVec &mask)
 {
+    if (!mMotorPowerOn) {
+        mInterface->SendError("Home: motor power is off");
+        return;
+    }
     const bool *galilIndexValid = GetGalilIndexValid(mask);
     const char *galilAxes = GetGalilAxes(galilIndexValid);
 
     sprintf(mBuffer, "Home: %s", galilAxes);
     mInterface->SendStatus(mBuffer);
 
-    SendCommand(WriteCmdAxes(mBuffer, "ST ", galilAxes));
-    SendCommand("HM");
-    SendCommand(WriteCmdAxes(mBuffer, "BG ", galilAxes));
     UnHome(mask);
-
-    // TODO: Following needs to be in state machine
-    // ST_HOMING
-    // WaitMotion();
-
-    // TODO: could also call SetAbsolutePosition
-    int32_t galilData[GALIL_MAX_AXES];
-    for (unsigned int i = 0; i < mGalilIndexMax; i++)
-        galilData[i] = 1;
-    SendCommand(WriteCmdValues(mBuffer, "ZA ", galilData, galilIndexValid, mGalilIndexMax));
+    if (mMotionActive)
+        SendCommand(WriteCmdAxes(mBuffer, "ST ", galilAxes));
+    SendCommand(WriteCmdAxes(mBuffer, "HM ", galilAxes));
+    SendCommand(WriteCmdAxes(mBuffer, "BG ", galilAxes));
 }
 
 void mtsGalilController::UnHome(const vctBoolVec &mask)
@@ -792,7 +843,12 @@ void mtsGalilController::UnHome(const vctBoolVec &mask)
     SendCommand(WriteCmdValues(mBuffer, "ZA ", galilData, galilIndexValid, mGalilIndexMax));
 }
 
-void mtsGalilController::SetAbsolutePosition(const vctDoubleVec &pos)
+void mtsGalilController::SetHomePosition(const vctDoubleVec &pos)
 {
-    galil_cmd_common("SetAbsolutePosition", "DP ", pos, mEncoderCountsPerUnit);
+    if (galil_cmd_common("SetHomePosition", "DP ", pos, mEncoderCountsPerUnit)) {
+        int32_t galilData[GALIL_MAX_AXES];
+        for (unsigned int i = 0; i < mGalilIndexMax; i++)
+            galilData[i] = 1;
+        SendCommand(WriteCmdValues(mBuffer, "ZA ", galilData, mGalilIndexValid, mGalilIndexMax));
+    }
 }
