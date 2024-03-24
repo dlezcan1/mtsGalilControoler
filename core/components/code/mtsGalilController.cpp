@@ -250,53 +250,28 @@ void mtsGalilController::Configure(const std::string& fileName)
     if (!jsonReader.parse(jsonStream, jsonConfig)) {
         CMN_LOG_CLASS_INIT_ERROR << "Configure: failed to parse " << fileName << " for Galil config" << std::endl
                                  << jsonReader.getFormattedErrorMessages();
-        return;
+        exit(EXIT_FAILURE);
     }
+    try {
+        m_configuration.DeSerializeTextJSON(jsonConfig);
+    } catch (std::exception & std_exception) {
+        CMN_LOG_CLASS_INIT_ERROR << "Configure: " << fileName << ": " << std_exception.what() << std::endl;
+        exit(EXIT_FAILURE);
+    }   
 
-    const Json::Value jsonVersion = jsonConfig["FileVersion"];
-    if (jsonVersion.empty()) {
-        CMN_LOG_CLASS_INIT_ERROR << "Error: no \"FileVersion\" field in JSON file: " << fileName << std::endl;
-        return;
-    }
-    unsigned int version = jsonVersion.asUInt();
-    if (version != 1) {
-        CMN_LOG_CLASS_INIT_ERROR << "Error: unsupported JSON FileVersion: " << version << std::endl;
-        return;
-    }
+    CMN_LOG_CLASS_INIT_VERBOSE << "Configure: parsed file " << fileName << std::endl
+                               << "Loaded configuration:" << std::endl
+                               << m_configuration << std::endl;
+    
+    // Size of array determines number of axes
+    mNumAxes = m_configuration.axes.size();
+    CMN_LOG_CLASS_INIT_VERBOSE << "Configure: found " << mNumAxes << " axes" << std::endl;
 
-    const Json::Value ipAddr = jsonConfig["IP_Address"];
-    if (ipAddr.empty()) {
-        CMN_LOG_CLASS_INIT_ERROR << "Configure: no \"IP_Address\" field in JSON file: " << fileName << std::endl;
-        return;
-    }
-    mDeviceName = ipAddr.asString();
-    CMN_LOG_CLASS_INIT_VERBOSE << "Configure: setting IP address " << mDeviceName << std::endl;
-
-    mDirectMode = jsonConfig.get("Galil_Direct", false).asBool();
-    if (mDirectMode) {
-        CMN_LOG_CLASS_INIT_VERBOSE << "Configure: setting Galil direct mode" << std::endl;
-    }
-
-    unsigned int modelType = jsonConfig.get("Galil_Model", 0).asUInt();
-    mModel = GetModelIndex(modelType);
+    mModel = GetModelIndex(m_configuration.model);
     if (mModel < NUM_MODELS) {
-        CMN_LOG_CLASS_INIT_VERBOSE << "Configure: setting Galil model to " << modelType
+        CMN_LOG_CLASS_INIT_VERBOSE << "Configure: setting Galil model to " << m_configuration.model
                                    << " (index = " << mModel << ")" << std::endl;
     }
-
-    mDR_Period_ms = jsonConfig.get("DR_Period_ms", 2).asUInt();
-    CMN_LOG_CLASS_INIT_VERBOSE << "Configure: setting DR period to " << mDR_Period_ms << " ms" << std::endl;
-
-    // Get axes array
-    const Json::Value axesArray = jsonConfig["Axes"];
-    if (axesArray.empty()) {
-        CMN_LOG_CLASS_INIT_ERROR << "Configure: cannot find \"Axes\" in " << fileName << std::endl;
-        return;
-    }
-
-    // Size of array determines number of axes
-    mNumAxes = axesArray.size();
-    CMN_LOG_CLASS_INIT_VERBOSE << "Configure: found " << mNumAxes << " axes" << std::endl;
 
     // Now, set the data sizes
     m_config_j.Name().SetSize(mNumAxes);
@@ -333,30 +308,13 @@ void mtsGalilController::Configure(const std::string& fileName)
     mAccelDefault.SetSize(mNumAxes);
     mDecel.SetSize(mNumAxes);
     mDecelDefault.SetSize(mNumAxes);
-
+    /*
     mGalilIndexMax = 0;
     unsigned int i;
     for (i = 0; i < GALIL_MAX_AXES; i++)
         mGalilIndexValid[i] = false;
 
     for (Json::ArrayIndex axis = 0; axis < axesArray.size(); axis++) {
-        const Json::Value curAxis = axesArray[axis];
-        const Json::Value galilIndexJson = curAxis["Galil_Channel"];
-        if (galilIndexJson.empty()) {
-            CMN_LOG_CLASS_INIT_ERROR << "Configure: missing \"Galil_Channel\" for axis " << axis << std::endl;
-            return;
-        }
-        if (!galilIndexJson.isNumeric()) {
-            CMN_LOG_CLASS_INIT_ERROR << "Configure: \"Galil_Channel\" for axis " << axis
-                                     << " is not a numeric value" << std::endl;
-            return;
-        }
-        unsigned int galilIndex = galilIndexJson.asUInt();
-        if (galilIndex >= GALIL_MAX_AXES) {
-            CMN_LOG_CLASS_INIT_ERROR << "Configure: \"Galil_Channel\" for axis " << axis
-                                     << " must be 0-" << (GALIL_MAX_AXES-1) << std::endl;
-            return;
-        }
         mGalilIndexValid[axis] = true;
         mAxisToGalilChannelMap[axis] = galilIndex;
         mGalilChannelToAxisMap[galilIndex] = axis;
@@ -383,11 +341,7 @@ void mtsGalilController::Configure(const std::string& fileName)
     mSpeedDefault.SetAll(0.025);   // 25 mm/s
     mAccelDefault.SetAll(0.256);   // 256 mm/s^2
     mDecelDefault.SetAll(0.256);   // 256 mm/s^2
-
-    // Galil Startup Program
-    if (jsonConfig.isMember("DMC_Startup_Program")) {
-        mDmcFile = jsonConfig["DMC_Startup_Program"].asString();
-    }
+    */
 
     // Call SetupInterfaces after Configure because we need to know the correct sizes of
     // the dynamic vectors, which are based on the number of configured axes.
@@ -398,33 +352,35 @@ void mtsGalilController::Configure(const std::string& fileName)
 
 void mtsGalilController::Startup()
 {
-    std::string GalilString = mDeviceName;
-    if (mDirectMode) {
+    std::string GalilString = m_configuration.name;
+    if (m_configuration.direct_mode) {
         GalilString.append(" -d");
     }
     GalilString.append(" -s DR");  // Subscribe to DR records
     GReturn ret = GOpen(GalilString.c_str(), &mGalil);
     if (ret != G_NO_ERROR) {
-        mInterface->SendError(this->GetName() + ": error opening " + mDeviceName);
-        CMN_LOG_CLASS_INIT_ERROR << "Galil GOpen: error opening " << mDeviceName
+        mInterface->SendError(this->GetName() + ": error opening " + m_configuration.name);
+        CMN_LOG_CLASS_INIT_ERROR << "Galil GOpen: error opening " << m_configuration.name
                                  << ": " << ret << std::endl;
         return;
     }
 
     // Upload a DMC program file if available
-    if (!mDmcFile.empty()) {
-        if (cmnPath::Exists(mDmcFile)) {
-            CMN_LOG_CLASS_INIT_VERBOSE << "Downloading " << mDmcFile << " to Galil controller" << std::endl;
-            if (GProgramDownloadFile(mGalil, mDmcFile.c_str(), 0) == G_NO_ERROR) {
+    const std::string & DMC_file = m_configuration.DMC_file;
+    if (!DMC_file.empty()) {
+        if (cmnPath::Exists(DMC_file)) {
+            CMN_LOG_CLASS_INIT_VERBOSE << "Startup: downloading " << DMC_file << " to Galil controller" << std::endl;
+            if (GProgramDownloadFile(mGalil, DMC_file.c_str(), 0) == G_NO_ERROR) {
                 SendCommand("XQ");  // Execute downloaded program
             }
             else {
-                CMN_LOG_CLASS_INIT_ERROR << "Configure: Error downloading DMC program file" << std::endl;
+                CMN_LOG_CLASS_INIT_ERROR << "Startup: error downloading DMC program file "
+                                         << DMC_file << std::endl;
             }
         }
         else {
-            CMN_LOG_CLASS_INIT_ERROR << "Configure: DMC program file \""
-                                     << mDmcFile << "\" not found" << std::endl;
+            CMN_LOG_CLASS_INIT_ERROR << "Startup: DMC program file \""
+                                     << DMC_file << "\" not found" << std::endl;
         }
     }
 
@@ -482,10 +438,10 @@ void mtsGalilController::Startup()
         }
     }
 
-    ret = GRecordRate(mGalil, mDR_Period_ms);
+    ret = GRecordRate(mGalil, m_configuration.DR_period_ms);
     if (ret != G_NO_ERROR) {
         CMN_LOG_CLASS_INIT_ERROR << "Galil GRecordRate: error " << ret << " setting rate to "
-                                 << mDR_Period_ms << " ms" << std::endl;
+                                 << m_configuration.DR_period_ms << " ms" << std::endl;
         // Close connection so we do not hang waiting for data
         Close();
     }

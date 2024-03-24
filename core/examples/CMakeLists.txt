@@ -12,7 +12,7 @@
 add_subdirectory (ConsoleTest)
 
 if (CISST_HAS_QT)
-  option (BUILD_ConsoleQt "Compile sawConsoleQt (requires Qt)" OFF)
+  option (BUILD_ConsoleQt "Compile sawConsoleQt (requires Qt)" ON)
 else ()
   message (STATUS "sawConsoleQt not available (requires Qt)")
 endif ()

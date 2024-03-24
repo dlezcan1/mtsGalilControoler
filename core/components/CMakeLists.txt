@@ -46,21 +46,32 @@ if (cisst_FOUND_AS_REQUIRED)
     include_directories (${gclib_INCLUDE_DIR})
     link_directories (${gclib_LIBRARY_DIR})
 
-    set (sawGalilController_INCLUDE_DIR "${sawGalilController_SOURCE_DIR}/include")
+    set (sawGalilController_INCLUDE_DIR
+      "${sawGalilController_SOURCE_DIR}/include"
+      "${sawGalilController_BINARY_DIR}/include")
     set (sawGalilController_HEADER_DIR "${sawGalilController_SOURCE_DIR}/include/sawGalilController")
     set (sawGalilController_LIBRARY_DIR "${LIBRARY_OUTPUT_PATH}" "${gclib_LIBRARY_DIR}")
     set (sawGalilController_LIBRARIES sawGalilController)
 
-    include_directories (${sawGalilController_INCLUDE_DIR})
+    include_directories (BEFORE ${sawGalilController_INCLUDE_DIR})
 
     # add all config files for this component
     cisst_add_config_files (sawGalilController)
 
+    # create data type using the data generator
+    cisst_data_generator (sawGalilController
+      "${sawGalilController_BINARY_DIR}/include"
+      "sawGalilController/"
+      code/saw_galil_configuration.cdg)
+
     set (sawGalilController_HEADER_FILES
       "${sawGalilController_HEADER_DIR}/mtsGalilController.h"
-      "${sawGalilController_HEADER_DIR}/sawGalilControllerExport.h")
+      "${sawGalilController_HEADER_DIR}/sawGalilControllerExport.h"
+      ${sawGalilController_CISST_DG_HDRS})
+
     set (sawGalilController_SOURCE_FILES
-      code/mtsGalilController.cpp)
+      code/mtsGalilController.cpp
+      ${sawGalilController_CISST_DG_SRCS})
 
     add_library (
       sawGalilController
@@ -83,7 +94,9 @@ if (cisst_FOUND_AS_REQUIRED)
 
     # Install target for headers and library
     install (
-      DIRECTORY "${sawGalilController_SOURCE_DIR}/include/sawGalilController"
+      DIRECTORY
+      "${sawGalilController_SOURCE_DIR}/include/sawGalilController"
+      "${sawGalilController_BINARY_DIR}/include/sawGalilController"
       DESTINATION include
       COMPONENT sawGalilController-dev)
 
