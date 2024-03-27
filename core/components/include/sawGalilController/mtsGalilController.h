@@ -7,7 +7,7 @@
   This component provides an interface to a Galil DMC controller, using the DR
   (DataRecord) approach, where the Galil controller periodically sends a data
   record. The format of the data record varies based on Galil DMC model type,
-  which can be specified (as "Galil_Model") in the JSON configuration file.
+  which can be specified (as "galil_model") in the JSON configuration file.
   Valid values of "Galil_Model" (which is an unsigned integer) are:
 
       4000   for DMC 4000, 4200, 4103, and 500x0 (default)
@@ -26,8 +26,8 @@ http://www.cisst.org/cisst/license.txt.
 --- end cisst license ---
 */
 
-#ifndef _mtsGalilContollerDR_h
-#define _mtsGalilContollerDR_h
+#ifndef _mtsGalilController_h
+#define _mtsGalilController_h
 
 #include <string>
 
@@ -41,6 +41,8 @@ http://www.cisst.org/cisst/license.txt.
 #include <cisstParameterTypes/prmPositionCartesianGet.h>
 #include <cisstParameterTypes/prmOperatingState.h>
 #include <cisstParameterTypes/prmActuatorState.h>
+
+#include <sawGalilController/saw_galil_configuration.h>
 
 // Always include last
 #include <sawGalilController/sawGalilControllerExport.h>
@@ -68,11 +70,9 @@ class CISST_EXPORT mtsGalilController : public mtsTaskContinuous
 protected:
 
     void         *mGalil;                   // Gcon
-    std::string   mDeviceName;              // IP address
-    bool          mDirectMode;              // Direct connection (not using gcaps)
-    unsigned int  mDR_Period_ms;            // DR period, in milliseconds
-    unsigned int  mModel;                   // Galil model (see list of supported models above)
-    std::string   mDmcFile;                 // DMC program to download to Galil on startup
+    saw_galil_configuration::controller m_configuration;
+
+    unsigned int  mModel;                   // Galil model
     unsigned int  mNumAxes;                 // Number of axes
     unsigned int  mGalilIndexMax;           // Maximum galil channel index
     uint32_t      mHeader;                  // Header bytes in DR packet

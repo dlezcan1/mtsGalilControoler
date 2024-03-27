@@ -5,22 +5,32 @@
 //    Original SARRP had 1000 counts/mm, so probably 2000 counts/rev
 //    1000 counts/mm --> 1000000 counts/m
 {
-    "FileVersion": 1,
-    "IP_Address": "169.254.0.51",
-    "Galil_Direct": 1,
-    "DMC_Startup_Program": "FlashXYZ.dmc",
-    "Axes": [
+    "file_version": 1,
+    "name": "FlashXYZ",
+    "IP_address": "169.254.0.51",
+    "direct_mode": 1,
+    "DMC_file": "FlashXYZ.dmc",
+    "axes": [
         {
-            "Galil_Channel": 0,
-            "Encoder_Conversion": 0.000001
+            "index": 0,
+            "type": 0,
+            "position_bits_to_SI": {
+                "scale": 0.000001
+            }
         },
         {
-            "Galil_Channel": 1,
-            "Encoder_Conversion": 0.000001
+            "index": 1,
+            "type": 0,
+            "position_bits_to_SI": {
+                "scale": 0.000001
+            }
         },
         {
-            "Galil_Channel": 2,
-            "Encoder_Conversion": 0.000001
+            "index": 2,
+            "type": 0,
+            "position_bits_to_SI": {
+                "scale": 0.000001
+            }
         }
     ]
 }

@@ -22,6 +22,7 @@ http://www.cisst.org/cisst/license.txt.
 #include <cisstCommon/cmnQt.h>
 #include <cisstMultiTask/mtsTaskManager.h>
 #include <cisstMultiTask/mtsSystemQtWidget.h>
+#include <cisstParameterTypes/prmStateRobotQtWidget.h>
 
 #include <sawGalilController/mtsGalilController.h>
 
@@ -69,9 +70,6 @@ int main(int argc, char * argv[])
     if (!options.Parse(ral.stripped_arguments(), std::cerr)) {
         return -1;
     }
-    std::string arguments;
-    options.PrintParsedArguments(arguments);
-    std::cout << "Options provided:" << std::endl << arguments << std::endl;
 
     // create the components
     mtsGalilController * galilController = new mtsGalilController("GalilController");
@@ -98,6 +96,16 @@ int main(int argc, char * argv[])
 
     // organize all widgets in a tab widget
     QTabWidget * tabWidget = new QTabWidget;
+
+    prmStateRobotQtWidgetComponent * stateWidget
+        = new prmStateRobotQtWidgetComponent("Galil-State");
+    stateWidget->SetPrismaticRevoluteFactors(1.0 / cmn_mm, cmn180_PI);
+    stateWidget->Configure();
+    componentManager->AddComponent(stateWidget);
+    componentManager->Connect(stateWidget->GetName(), "Component",
+                              galilController->GetName(), "control");
+    tabWidget->addTab(stateWidget, "State");
+
     mtsSystemQtWidgetComponent * systemWidget
         = new mtsSystemQtWidgetComponent("Galil-System");
     systemWidget->Configure();
