@@ -8,7 +8,7 @@
   (DataRecord) approach, where the Galil controller periodically sends a data
   record. The format of the data record varies based on Galil DMC model type,
   which can be specified (as "galil_model") in the JSON configuration file.
-  Valid values of "Galil_Model" (which is an unsigned integer) are:
+  Valid values of "galil_model" (which is an unsigned integer) are:
 
       4000   for DMC 4000, 4200, 4103, and 500x0 (default)
      52000   for DMC 52000
@@ -74,7 +74,7 @@ protected:
 
     unsigned int  mModel;                   // Galil model
     unsigned int  mNumAxes;                 // Number of axes
-    unsigned int  mGalilIndexMax;           // Maximum galil channel index
+    unsigned int  mGalilIndexMax;           // Maximum galil index
     uint32_t      mHeader;                  // Header bytes in DR packet
     uint16_t      mSampleNum;               // Sample number from controller
     uint8_t       mErrorCode;               // Error code from controller
@@ -84,8 +84,8 @@ protected:
     prmStateJoint m_setpoint_js;            // Setpoint joint state (CRTK)
     prmOperatingState m_op_state;           // Operating state (CRTK)
     prmActuatorState mActuatorState;        // Actuator state
-    vctUIntVec    mAxisToGalilChannelMap;   // Map from axis index to Galil channel
-    vctUIntVec    mGalilChannelToAxisMap;   // Map from Galil channel to axis index
+    vctUIntVec    mAxisToGalilIndexMap;     // Map from axis number to Galil index
+    vctUIntVec    mGalilIndexToAxisMap;   // Map from Galil index to axis number
     vctDoubleVec  mEncoderCountsPerUnit;    // Encoder conversion factors
     vctUShortVec  mAxisStatus;              // Axis status
     vctUCharVec   mStopCode;                // Axis stop code (see Galil SC command)
@@ -120,7 +120,7 @@ protected:
     // Parameters:
     //    buf    Buffer for output
     //    cmd    Galil command string, including space if desired (e.g, "SP ")
-    //    data   Data values (indexed by Galil channel, so valid values may not be contiguous)
+    //    data   Data values (indexed by Galil index, so valid values may not be contiguous)
     //    valid  Boolean array indicating which data values are valid
     //    num    Size of data and valid arrays
     // Example output: "SP 1000,,500"

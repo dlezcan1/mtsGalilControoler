@@ -295,9 +295,9 @@ void mtsGalilController::Configure(const std::string& fileName)
     mActuatorState.Position().SetAll(0.0);
     mActuatorState.Velocity().SetAll(0.0);
 
-    mAxisToGalilChannelMap.SetSize(mNumAxes);
-    mGalilChannelToAxisMap.SetSize(GALIL_MAX_AXES);
-    mGalilChannelToAxisMap.SetAll(mNumAxes);   // Initialize to invalid value
+    mAxisToGalilIndexMap.SetSize(mNumAxes);
+    mGalilIndexToAxisMap.SetSize(GALIL_MAX_AXES);
+    mGalilIndexToAxisMap.SetAll(mNumAxes);   // Initialize to invalid value
     mEncoderCountsPerUnit.SetSize(mNumAxes);
     mAxisStatus.SetSize(mNumAxes);
     mStopCode.SetSize(mNumAxes);
@@ -310,24 +310,25 @@ void mtsGalilController::Configure(const std::string& fileName)
     mAccelDefault.SetSize(mNumAxes);
     mDecel.SetSize(mNumAxes);
     mDecelDefault.SetSize(mNumAxes);
-    /*
+
     mGalilIndexMax = 0;
     unsigned int i;
     for (i = 0; i < GALIL_MAX_AXES; i++)
         mGalilIndexValid[i] = false;
 
-    for (Json::ArrayIndex axis = 0; axis < axesArray.size(); axis++) {
+    for (unsigned int axis = 0; axis < mNumAxes; axis++) {
+        saw_galil_configuration::axis &axisData = m_configuration.axes[axis];
         mGalilIndexValid[axis] = true;
-        mAxisToGalilChannelMap[axis] = galilIndex;
-        mGalilChannelToAxisMap[galilIndex] = axis;
-        char galilChannel = 'A'+galilIndex;
-        if (galilIndex > mGalilIndexMax)
-            mGalilIndexMax = galilIndex;   // Save largest GalilIndex for future efficiency
+        mAxisToGalilIndexMap[axis] = axisData.index;
+        mGalilIndexToAxisMap[axisData.index] = axis;
+        char galilChannel = 'A'+axisData.index;
+        if (axisData.index > mGalilIndexMax)
+            mGalilIndexMax = axisData.index;   // Save largest Galil index for future efficiency
         m_measured_js.Name()[axis].assign(1, galilChannel);
         m_setpoint_js.Name()[axis].assign(1, galilChannel);
         m_config_j.Name()[axis].assign(1, galilChannel);
-        m_config_j.Type()[axis] = PRM_JOINT_PRISMATIC;
-        mEncoderCountsPerUnit[axis] = curAxis.get("Encoder_Conversion", 1.0).asDouble();
+        m_config_j.Type()[axis] = PRM_JOINT_PRISMATIC;   // axisData.type
+        mEncoderCountsPerUnit[axis] = axisData.position_bits_to_SI.scale;
     }
     mGalilIndexMax++;   // Increment so that we can test for less than
 
@@ -343,7 +344,6 @@ void mtsGalilController::Configure(const std::string& fileName)
     mSpeedDefault.SetAll(0.025);   // 25 mm/s
     mAccelDefault.SetAll(0.256);   // 256 mm/s^2
     mDecelDefault.SetAll(0.256);   // 256 mm/s^2
-    */
 
     // Call SetupInterfaces after Configure because we need to know the correct sizes of
     // the dynamic vectors, which are based on the number of configured axes.
@@ -354,7 +354,7 @@ void mtsGalilController::Configure(const std::string& fileName)
 
 void mtsGalilController::Startup()
 {
-    std::string GalilString = m_configuration.name;
+    std::string GalilString = m_configuration.IP_address;
     if (m_configuration.direct_mode) {
         GalilString.append(" -d");
     }
@@ -473,7 +473,7 @@ void mtsGalilController::Run()
             bool isAllMotorOn = true;
             bool isAllMotorOff = true;
             for (size_t i = 0; i < mNumAxes; i++) {
-                unsigned int galilAxis = mAxisToGalilChannelMap[i];
+                unsigned int galilAxis = mAxisToGalilIndexMap[i];
                 AxisDataMin *axisPtr = reinterpret_cast<AxisDataMin *>(gRec.byte_array +
                                                                        AxisDataOffset[mModel] +
                                                                        galilAxis*AxisDataSize[mModel]);
@@ -668,7 +668,7 @@ bool mtsGalilController::galil_cmd_common(const char *cmdName, const char *cmdGa
     int32_t galilData[GALIL_MAX_AXES];
     size_t i;
     for (i = 0; i < mNumAxes; i++) {
-        unsigned int galilIndex = mAxisToGalilChannelMap[i];
+        unsigned int galilIndex = mAxisToGalilIndexMap[i];
         galilData[galilIndex] = static_cast<int32_t>(std::round(data[i]/conv[i]));
     }
 
@@ -752,7 +752,7 @@ const bool *mtsGalilController::GetGalilIndexValid(const vctBoolVec &mask) const
         galilIndexValid[i] = false;
     for (i = 0; i < mask.size(); i++) {
         if (mask[i]) {
-            unsigned int galilIndex = mAxisToGalilChannelMap[i];
+            unsigned int galilIndex = mAxisToGalilIndexMap[i];
             galilIndexValid[galilIndex] = true;
         }
     }

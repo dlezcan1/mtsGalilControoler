@@ -149,6 +149,7 @@ class {
     member {
         name direct_mode;
         type bool;
+        default false;
         visibility public;
     }
     member {
@@ -164,7 +165,7 @@ class {
         visibility public;
     }
     member {
-        name DMC_file;;
+        name DMC_file;
         type std::string;
         default std::string("");
         visibility public;

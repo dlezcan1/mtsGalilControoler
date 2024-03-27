@@ -4,6 +4,8 @@
 // Dover XYR-6060: 100mm x 100mm, 2mm lead-screw, encoder with 2000 or 4000 counts/rev
 //    Original SARRP had 1000 counts/mm, so probably 2000 counts/rev
 //    1000 counts/mm --> 1000000 counts/m
+//
+// position_bits_to_SI.offset is the home position
 {
     "file_version": 1,
     "name": "FlashXYZ",
@@ -15,22 +17,37 @@
             "index": 0,
             "type": 0,
             "position_bits_to_SI": {
-                "scale": 0.000001
-            }
+                "scale": 0.000001,
+		"offset": -50.0
+            },
+	    "limits": {
+		"lower": -50.0,
+		"upper":  50.0
+	    }
         },
         {
             "index": 1,
             "type": 0,
             "position_bits_to_SI": {
-                "scale": 0.000001
-            }
+                "scale": 0.000001,
+		"offset": -50.0
+            },
+	    "limits": {
+		"lower": -50.0,
+		"upper":  50.0
+	    }
         },
         {
             "index": 2,
             "type": 0,
             "position_bits_to_SI": {
-                "scale": 0.000001
-            }
+                "scale": 0.000001,
+		"offset": -30.0
+            },
+	    "limits": {
+		"lower": -30.0,
+		"upper":  30.0
+	    }
         }
     ]
 }
