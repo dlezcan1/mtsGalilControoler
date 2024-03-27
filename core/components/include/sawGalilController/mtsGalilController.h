@@ -184,6 +184,12 @@ protected:
     void Home(const vctBoolVec &mask);
     void UnHome(const vctBoolVec &mask);
 
+    // FindEdge: move specified axes until transition on home input
+    void FindEdge(const vctBoolVec &mask);
+    // FindIndex: move specified axes until index pulse detected, will set
+    // axis position to 0 when done
+    void FindIndex(const vctBoolVec &mask);
+
     // Set absolute position (e.g., for homing); also sets home flag
     // (using ZA) on Galil controller
     void SetHomePosition(const vctDoubleVec &pos);

@@ -207,6 +207,8 @@ void mtsGalilController::SetupInterfaces(void)
         mInterface->AddCommandWrite(&mtsGalilController::SetDecel, this, "SetDecel");
         mInterface->AddCommandWrite(&mtsGalilController::Home, this, "Home");
         mInterface->AddCommandWrite(&mtsGalilController::UnHome, this, "UnHome");
+        mInterface->AddCommandWrite(&mtsGalilController::FindEdge, this, "FindEdge");
+        mInterface->AddCommandWrite(&mtsGalilController::FindIndex, this, "FindIndex");
         mInterface->AddCommandWrite(&mtsGalilController::SetHomePosition, this, "SetHomePosition");
         mInterface->AddCommandReadState(this->StateTable, mActuatorState, "GetActuatorState");
         mInterface->AddCommandReadState(this->StateTable, mSpeed, "GetSpeed");
@@ -824,9 +826,6 @@ void mtsGalilController::Home(const vctBoolVec &mask)
     const bool *galilIndexValid = GetGalilIndexValid(mask);
     const char *galilAxes = GetGalilAxes(galilIndexValid);
 
-    sprintf(mBuffer, "Home: %s", galilAxes);
-    mInterface->SendStatus(mBuffer);
-
     UnHome(mask);
     if (mMotionActive)
         SendCommand(WriteCmdAxes(mBuffer, "ST ", galilAxes));
@@ -841,6 +840,36 @@ void mtsGalilController::UnHome(const vctBoolVec &mask)
     for (unsigned int i = 0; i < mGalilIndexMax; i++)
         galilData[i] = 0;
     SendCommand(WriteCmdValues(mBuffer, "ZA ", galilData, galilIndexValid, mGalilIndexMax));
+}
+
+void mtsGalilController::FindEdge(const vctBoolVec &mask)
+{
+    if (!mMotorPowerOn) {
+        mInterface->SendError("FindEdge: motor power is off");
+        return;
+    }
+    const bool *galilIndexValid = GetGalilIndexValid(mask);
+    const char *galilAxes = GetGalilAxes(galilIndexValid);
+
+    if (mMotionActive)
+        SendCommand(WriteCmdAxes(mBuffer, "ST ", galilAxes));
+    SendCommand(WriteCmdAxes(mBuffer, "FE ", galilAxes));
+    SendCommand(WriteCmdAxes(mBuffer, "BG ", galilAxes));
+}
+
+void mtsGalilController::FindIndex(const vctBoolVec &mask)
+{
+    if (!mMotorPowerOn) {
+        mInterface->SendError("FindIndex: motor power is off");
+        return;
+    }
+    const bool *galilIndexValid = GetGalilIndexValid(mask);
+    const char *galilAxes = GetGalilAxes(galilIndexValid);
+
+    if (mMotionActive)
+        SendCommand(WriteCmdAxes(mBuffer, "ST ", galilAxes));
+    SendCommand(WriteCmdAxes(mBuffer, "FI ", galilAxes));
+    SendCommand(WriteCmdAxes(mBuffer, "BG ", galilAxes));
 }
 
 void mtsGalilController::SetHomePosition(const vctDoubleVec &pos)
