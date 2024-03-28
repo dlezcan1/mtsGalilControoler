@@ -361,8 +361,8 @@ void mtsGalilController::Startup()
     GalilString.append(" -s DR");  // Subscribe to DR records
     GReturn ret = GOpen(GalilString.c_str(), &mGalil);
     if (ret != G_NO_ERROR) {
-        mInterface->SendError(this->GetName() + ": error opening " + m_configuration.name);
-        CMN_LOG_CLASS_INIT_ERROR << "Galil GOpen: error opening " << m_configuration.name
+        mInterface->SendError(this->GetName() + ": error opening " + m_configuration.IP_address);
+        CMN_LOG_CLASS_INIT_ERROR << "Galil GOpen: error opening " << m_configuration.IP_address
                                  << ": " << ret << std::endl;
         return;
     }
