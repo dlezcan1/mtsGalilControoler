@@ -317,7 +317,7 @@ void mtsGalilController::Configure(const std::string& fileName)
         mGalilIndexValid[i] = false;
 
     for (unsigned int axis = 0; axis < mNumAxes; axis++) {
-        saw_galil_configuration::axis &axisData = m_configuration.axes[axis];
+        sawGalilControllerConfig::axis &axisData = m_configuration.axes[axis];
         mGalilIndexValid[axis] = true;
         mAxisToGalilIndexMap[axis] = axisData.index;
         mGalilIndexToAxisMap[axisData.index] = axis;

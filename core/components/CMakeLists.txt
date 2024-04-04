@@ -62,7 +62,7 @@ if (cisst_FOUND_AS_REQUIRED)
     cisst_data_generator (sawGalilController
       "${sawGalilController_BINARY_DIR}/include"
       "sawGalilController/"
-      code/saw_galil_configuration.cdg)
+      code/sawGalilControllerConfig.cdg)
 
     set (sawGalilController_HEADER_FILES
       "${sawGalilController_HEADER_DIR}/mtsGalilController.h"

@@ -9,7 +9,7 @@ inline-header {
 #include <sawGalilController/sawGalilControllerRevision.h>
 #include <sawGalilController/sawGalilControllerExport.h>
 
-namespace saw_galil_configuration {
+namespace sawGalilControllerConfig {
 
     inline bool unit_is_distance(const std::string & unit) {
         // make sure this is properly sorted
@@ -47,13 +47,13 @@ namespace saw_galil_configuration {
         }
         return 0.0;
     }
-} // namespace saw_galil_configuration
+} // namespace sawGalilControllerConfig
 
 } // inline-header
 
 class {
     name linear_function;
-    namespace saw_galil_configuration;
+    namespace sawGalilControllerConfig;
     attribute CISST_EXPORT;
     member {
         name scale;
@@ -77,7 +77,7 @@ class {
 
 class {
     name limits;
-    namespace saw_galil_configuration;
+    namespace sawGalilControllerConfig;
     attribute CISST_EXPORT;
     member {
         name lower;
@@ -100,7 +100,7 @@ class {
 
 class {
     name axis;
-    namespace saw_galil_configuration;
+    namespace sawGalilControllerConfig;
     attribute CISST_EXPORT;
     member {
         name index;
@@ -114,20 +114,20 @@ class {
     }
     member {
         name position_bits_to_SI;
-        type saw_galil_configuration::linear_function;
+        type sawGalilControllerConfig::linear_function;
         visibility public;
     }
     member {
         name position_limits;
-        type saw_galil_configuration::limits;
-        default saw_galil_configuration::limits();
+        type sawGalilControllerConfig::limits;
+        default sawGalilControllerConfig::limits();
         visibility public;
     }
 }
 
 class {
     name controller;
-    namespace saw_galil_configuration;
+    namespace sawGalilControllerConfig;
     attribute CISST_EXPORT;
 
     member {
@@ -172,7 +172,7 @@ class {
     }
     member {
         name axes;
-        type std::vector<saw_galil_configuration::axis>;
+        type std::vector<sawGalilControllerConfig::axis>;
         visibility public;
     }
 }

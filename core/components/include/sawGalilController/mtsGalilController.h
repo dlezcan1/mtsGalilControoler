@@ -42,7 +42,7 @@ http://www.cisst.org/cisst/license.txt.
 #include <cisstParameterTypes/prmOperatingState.h>
 #include <cisstParameterTypes/prmActuatorState.h>
 
-#include <sawGalilController/saw_galil_configuration.h>
+#include <sawGalilController/sawGalilControllerConfig.h>
 
 // Always include last
 #include <sawGalilController/sawGalilControllerExport.h>
@@ -70,7 +70,7 @@ class CISST_EXPORT mtsGalilController : public mtsTaskContinuous
 protected:
 
     void         *mGalil;                   // Gcon
-    saw_galil_configuration::controller m_configuration;
+    sawGalilControllerConfig::controller m_configuration;
 
     unsigned int  mModel;                   // Galil model
     unsigned int  mNumAxes;                 // Number of axes

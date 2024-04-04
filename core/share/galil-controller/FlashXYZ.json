@@ -18,36 +18,36 @@
             "type": 0,
             "position_bits_to_SI": {
                 "scale": 0.000001,
-		"offset": -50.0
+                "offset": -0.05
             },
-	    "limits": {
-		"lower": -50.0,
-		"upper":  50.0
-	    }
+            "limits": {
+                "lower": -0.05,
+                "upper":  0.05
+            }
         },
         {
             "index": 1,
             "type": 0,
             "position_bits_to_SI": {
                 "scale": 0.000001,
-		"offset": -50.0
+                "offset": -0.05
             },
-	    "limits": {
-		"lower": -50.0,
-		"upper":  50.0
-	    }
+            "limits": {
+                "lower": -0.05,
+                "upper":  0.05
+            }
         },
         {
             "index": 2,
             "type": 0,
             "position_bits_to_SI": {
                 "scale": 0.000001,
-		"offset": -30.0
+                "offset": -0.03
             },
-	    "limits": {
-		"lower": -30.0,
-		"upper":  30.0
-	    }
+            "limits": {
+                "lower": -0.03,
+                "upper":  0.03
+            }
         }
     ]
 }
