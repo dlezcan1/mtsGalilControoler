@@ -278,6 +278,8 @@ void mtsGalilController::Configure(const std::string& fileName)
     // Now, set the data sizes
     m_config_j.Name().SetSize(mNumAxes);
     m_config_j.Type().SetSize(mNumAxes);
+    m_config_j.PositionMin().SetSize(mNumAxes);
+    m_config_j.PositionMax().SetSize(mNumAxes);
     // We have position and velocity for measured_js
     m_measured_js.Name().SetSize(mNumAxes);
     m_measured_js.Position().SetSize(mNumAxes);
@@ -299,6 +301,7 @@ void mtsGalilController::Configure(const std::string& fileName)
     mGalilIndexToAxisMap.SetSize(GALIL_MAX_AXES);
     mGalilIndexToAxisMap.SetAll(mNumAxes);   // Initialize to invalid value
     mEncoderCountsPerUnit.SetSize(mNumAxes);
+    mHomePos.SetSize(mNumAxes);
     mAxisStatus.SetSize(mNumAxes);
     mStopCode.SetSize(mNumAxes);
     mSwitches.SetSize(mNumAxes);
@@ -328,7 +331,10 @@ void mtsGalilController::Configure(const std::string& fileName)
         m_setpoint_js.Name()[axis].assign(1, galilChannel);
         m_config_j.Name()[axis].assign(1, galilChannel);
         m_config_j.Type()[axis] = PRM_JOINT_PRISMATIC;   // axisData.type
+        m_config_j.PositionMin()[axis] = axisData.position_limits.lower;
+        m_config_j.PositionMax()[axis] = axisData.position_limits.upper;
         mEncoderCountsPerUnit[axis] = axisData.position_bits_to_SI.scale;
+        mHomePos[axis] = axisData.position_bits_to_SI.offset;
     }
     mGalilIndexMax++;   // Increment so that we can test for less than
 

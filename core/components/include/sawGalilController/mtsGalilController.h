@@ -87,6 +87,7 @@ protected:
     vctUIntVec    mAxisToGalilIndexMap;     // Map from axis number to Galil index
     vctUIntVec    mGalilIndexToAxisMap;   // Map from Galil index to axis number
     vctDoubleVec  mEncoderCountsPerUnit;    // Encoder conversion factors
+    vctDoubleVec  mHomePos;                 // Encoder home positions (offsets)
     vctUShortVec  mAxisStatus;              // Axis status
     vctUCharVec   mStopCode;                // Axis stop code (see Galil SC command)
     vctUCharVec   mSwitches;                // Axis switches (see Galil TS command)
