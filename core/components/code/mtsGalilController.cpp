@@ -301,6 +301,7 @@ void mtsGalilController::Configure(const std::string& fileName)
     mGalilIndexToAxisMap.SetSize(GALIL_MAX_AXES);
     mGalilIndexToAxisMap.SetAll(mNumAxes);   // Initialize to invalid value
     mEncoderCountsPerUnit.SetSize(mNumAxes);
+    mEncoderOffset.SetSize(mNumAxes);
     mHomePos.SetSize(mNumAxes);
     mAxisStatus.SetSize(mNumAxes);
     mStopCode.SetSize(mNumAxes);
@@ -321,7 +322,7 @@ void mtsGalilController::Configure(const std::string& fileName)
 
     for (unsigned int axis = 0; axis < mNumAxes; axis++) {
         sawGalilControllerConfig::axis &axisData = m_configuration.axes[axis];
-        mGalilIndexValid[axis] = true;
+        mGalilIndexValid[axisData.index] = true;
         mAxisToGalilIndexMap[axis] = axisData.index;
         mGalilIndexToAxisMap[axisData.index] = axis;
         char galilChannel = 'A'+axisData.index;
@@ -330,11 +331,12 @@ void mtsGalilController::Configure(const std::string& fileName)
         m_measured_js.Name()[axis].assign(1, galilChannel);
         m_setpoint_js.Name()[axis].assign(1, galilChannel);
         m_config_j.Name()[axis].assign(1, galilChannel);
-        m_config_j.Type()[axis] = PRM_JOINT_PRISMATIC;   // axisData.type
+        m_config_j.Type()[axis] = static_cast<prmJointType>(axisData.type);
         m_config_j.PositionMin()[axis] = axisData.position_limits.lower;
         m_config_j.PositionMax()[axis] = axisData.position_limits.upper;
         mEncoderCountsPerUnit[axis] = axisData.position_bits_to_SI.scale;
-        mHomePos[axis] = axisData.position_bits_to_SI.offset;
+        mEncoderOffset[axis] = static_cast<long>(axisData.position_bits_to_SI.offset);
+        mHomePos[axis] = axisData.home_pos;
     }
     mGalilIndexMax++;   // Increment so that we can test for less than
 
@@ -483,9 +485,9 @@ void mtsGalilController::Run()
                 AxisDataMin *axisPtr = reinterpret_cast<AxisDataMin *>(gRec.byte_array +
                                                                        AxisDataOffset[mModel] +
                                                                        galilAxis*AxisDataSize[mModel]);
-                m_measured_js.Position()[i] = mEncoderCountsPerUnit[i] * axisPtr->pos;
-                m_measured_js.Velocity()[i] = mEncoderCountsPerUnit[i] * axisPtr->vel;
-                m_setpoint_js.Position()[i] = mEncoderCountsPerUnit[i] * axisPtr->ref_pos;
+                m_measured_js.Position()[i] = (axisPtr->pos - mEncoderOffset[i])/mEncoderCountsPerUnit[i];
+                m_measured_js.Velocity()[i] = axisPtr->vel/mEncoderCountsPerUnit[i];
+                m_setpoint_js.Position()[i] = (axisPtr->ref_pos - mEncoderOffset[i])/mEncoderCountsPerUnit[i];
                 m_setpoint_js.Effort()[i] = (axisPtr->torque*9.9982)/32767.0;  // See Galil TT command
                 mAxisStatus[i] = axisPtr->status;     // See Galil User Manual
                 mStopCode[i] = axisPtr->stop_code;    // See Galil SC command
@@ -535,7 +537,7 @@ void mtsGalilController::Run()
 
             if (!isAllMotorOn && !isAllMotorOff) {
                 // If a mix of on/off motors, turn them all off
-                mInterface->SendWarning(this->GetName() + ": turning off all motors");
+                mInterface->SendWarning(this->GetName() + ": inconsistent motor power (turning off)");
                 DisableMotorPower();
                 isAllMotorOn = false;
                 isAllMotorOff = true;
@@ -659,7 +661,7 @@ void mtsGalilController::AbortMotion()
 }
 
 bool mtsGalilController::galil_cmd_common(const char *cmdName, const char *cmdGalil,
-                                            const vctDoubleVec &data, const vctDoubleVec &conv)
+                                          const vctDoubleVec &data, bool useOffset)
 {
     if (!mGalil)
         return false;
@@ -675,7 +677,10 @@ bool mtsGalilController::galil_cmd_common(const char *cmdName, const char *cmdGa
     size_t i;
     for (i = 0; i < mNumAxes; i++) {
         unsigned int galilIndex = mAxisToGalilIndexMap[i];
-        galilData[galilIndex] = static_cast<int32_t>(std::round(data[i]/conv[i]));
+        int32_t value = static_cast<int32_t>(std::round(data[i]*mEncoderCountsPerUnit[i]));
+        if (useOffset)
+            value += mEncoderOffset[i];
+        galilData[galilIndex] = value;
     }
 
     SendCommand(WriteCmdValues(mBuffer, cmdGalil, galilData, mGalilIndexValid, mGalilIndexMax));
@@ -691,7 +696,7 @@ void mtsGalilController::servo_jp(const prmPositionJointSet &jtpos)
     // Stop motion if active
     if (mMotionActive)
         SendCommand(WriteCmdAxes(mBuffer, "ST ", mGalilAxes));
-    if (galil_cmd_common("servo_jp", "PA ", jtpos.Goal(), mEncoderCountsPerUnit))
+    if (galil_cmd_common("servo_jp", "PA ", jtpos.Goal(), true))
         SendCommand(WriteCmdAxes(mBuffer, "BG ", mGalilAxes));
 }
 
@@ -704,7 +709,7 @@ void mtsGalilController::servo_jr(const prmPositionJointSet &jtpos)
     // Stop motion if active
     if (mMotionActive)
         SendCommand(WriteCmdAxes(mBuffer, "ST ", mGalilAxes));
-    if (galil_cmd_common("servo_jr", "PR ", jtpos.Goal(), mEncoderCountsPerUnit))
+    if (galil_cmd_common("servo_jr", "PR ", jtpos.Goal(), false))
         SendCommand(WriteCmdAxes(mBuffer, "BG ", mGalilAxes));
 }
 
@@ -717,7 +722,7 @@ void mtsGalilController::servo_jv(const prmVelocityJointSet &jtvel)
     // TODO: Only need to send BG after the first JG command
     // Note that JG actually updates SP on the Galil, but for now we do not update
     // mSpeed -- that allows us to restore the previous speed when we stop.
-    if (galil_cmd_common("servo_jv", "JG ", jtvel.Goal(), mEncoderCountsPerUnit))
+    if (galil_cmd_common("servo_jv", "JG ", jtvel.Goal(), false))
         SendCommand(WriteCmdAxes(mBuffer, "BG ", mGalilAxes));
 }
 
@@ -734,19 +739,19 @@ void mtsGalilController::hold(void)
 
 void mtsGalilController::SetSpeed(const vctDoubleVec &spd)
 {
-    if (galil_cmd_common("SetSpeed", "SP ", spd, mEncoderCountsPerUnit))
+    if (galil_cmd_common("SetSpeed", "SP ", spd, false))
         mSpeed = spd;
 }
 
 void mtsGalilController::SetAccel(const vctDoubleVec &accel)
 {
-    if (galil_cmd_common("SetAccel", "AC ", accel, mEncoderCountsPerUnit))
+    if (galil_cmd_common("SetAccel", "AC ", accel, false))
         mAccel = accel;
 }
 
 void mtsGalilController::SetDecel(const vctDoubleVec &decel)
 {
-    if (galil_cmd_common("SetDecel", "DC ", decel, mEncoderCountsPerUnit))
+    if (galil_cmd_common("SetDecel", "DC ", decel, false))
         mDecel = decel;
 }
 
@@ -836,7 +841,7 @@ void mtsGalilController::FindIndex(const vctBoolVec &mask)
 
 void mtsGalilController::SetHomePosition(const vctDoubleVec &pos)
 {
-    if (galil_cmd_common("SetHomePosition", "DP ", pos, mEncoderCountsPerUnit)) {
+    if (galil_cmd_common("SetHomePosition", "DP ", pos, true)) {
         int32_t galilData[GALIL_MAX_AXES];
         for (unsigned int i = 0; i < mGalilIndexMax; i++)
             galilData[i] = 1;

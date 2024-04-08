@@ -94,6 +94,7 @@ class {
     member {
         name unit;
         type std::string;
+        default std::string("none");
         visibility public;
     }
 }
@@ -115,6 +116,12 @@ class {
     member {
         name position_bits_to_SI;
         type sawGalilControllerConfig::linear_function;
+        visibility public;
+    }
+    member {
+        name home_pos;
+        type double;
+        default 0.0;
         visibility public;
     }
     member {

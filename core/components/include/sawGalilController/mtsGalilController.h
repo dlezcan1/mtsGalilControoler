@@ -85,8 +85,9 @@ protected:
     prmOperatingState m_op_state;           // Operating state (CRTK)
     prmActuatorState mActuatorState;        // Actuator state
     vctUIntVec    mAxisToGalilIndexMap;     // Map from axis number to Galil index
-    vctUIntVec    mGalilIndexToAxisMap;   // Map from Galil index to axis number
+    vctUIntVec    mGalilIndexToAxisMap;     // Map from Galil index to axis number
     vctDoubleVec  mEncoderCountsPerUnit;    // Encoder conversion factors
+    vctLongVec    mEncoderOffset;           // Encoder offset (counts or bits)
     vctDoubleVec  mHomePos;                 // Encoder home positions (offsets)
     vctUShortVec  mAxisStatus;              // Axis status
     vctUCharVec   mStopCode;                // Axis stop code (see Galil SC command)
@@ -157,7 +158,7 @@ protected:
 
     // Common method for sending command to Galil
     bool galil_cmd_common(const char *cmdName, const char *cmdGalil, const vctDoubleVec &goal,
-                          const vctDoubleVec &conv);
+                          bool useOffset);
 
     // Move joint to specified position
     void servo_jp(const prmPositionJointSet &jtpos);

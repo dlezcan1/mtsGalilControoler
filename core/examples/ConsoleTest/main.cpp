@@ -32,7 +32,10 @@ private:
     size_t NumAxes;
     vctDoubleVec jtgoal, jtvel;
     vctDoubleVec jtpos;
+    // Scale factor for internal units (m, rad) to display units (mm, deg)
+    vctDoubleVec jtscale;
 
+    prmConfigurationJoint m_config_js;
     prmStateJoint m_measured_js;
     prmStateJoint m_setpoint_js;
     prmPositionJointSet jtposSet;
@@ -54,6 +57,7 @@ private:
     mtsFunctionWrite servo_jr;
     mtsFunctionWrite servo_jv;
     mtsFunctionVoid hold;
+    mtsFunctionRead get_config_js;
     mtsFunctionRead get_header;
     mtsFunctionRead get_sample_num;
     mtsFunctionRead get_error_code;
@@ -89,6 +93,7 @@ public:
             req->AddFunction("servo_jr", servo_jr);
             req->AddFunction("servo_jv", servo_jv);
             req->AddFunction("hold", hold);
+            req->AddFunction("configuration_js", get_config_js);
             req->AddFunction("EnableMotorPower", crtk_enable);
             req->AddFunction("DisableMotorPower", crtk_disable);
             req->AddFunction("GetHeader", get_header);
@@ -134,8 +139,26 @@ public:
         jtpos.SetSize(NumAxes);
         jtgoal.SetSize(NumAxes);
         jtvel.SetSize(NumAxes);
+        jtscale.SetSize(NumAxes);
         jtposSet.Goal().SetSize(NumAxes);
         jtvelSet.SetSize(NumAxes);
+
+        // Get joint configuration
+        get_config_js(m_config_js);
+        // Set jtscale based on joint type (prismatic or revolute)
+        for (size_t i = 0; i < NumAxes; i++) {
+            if (m_config_js.Type()[i] == PRM_JOINT_PRISMATIC) {
+                jtscale[i] = 1000.0;     // meters --> millimeters
+            }
+            else if (m_config_js.Type()[i] == PRM_JOINT_REVOLUTE) {
+                jtscale[i] = cmn180_PI;  // radians --> degrees
+            }
+            else {
+                std::cout << "GalilClient: joint " << i << " is unknown type ("
+                          << m_config_js.Type()[i] << ")" << std::endl;
+                jtscale[i] = 1.0;
+            }
+        }
 
         PrintHelp();
     }
@@ -165,7 +188,7 @@ public:
                 for (i = 0; i < NumAxes; i++)
                     std::cin >> jtgoal[i];
                 std::cout << "Moving to " << jtgoal << std::endl;
-                jtgoal.Divide(1000.0);   // Convert to SI
+                jtgoal.ElementwiseDivide(jtscale);
                 jtposSet.SetGoal(jtgoal);
                 servo_jp(jtposSet);
                 break;
@@ -175,7 +198,7 @@ public:
                 for (i = 0; i < NumAxes; i++)
                     std::cin >> jtgoal[i];
                 std::cout << "Relative move by " << jtgoal << std::endl;
-                jtgoal.Divide(1000.0);   // Convert to SI
+                jtgoal.ElementwiseDivide(jtscale);
                 jtposSet.SetGoal(jtgoal);
                 servo_jr(jtposSet);
                 break;
@@ -184,7 +207,7 @@ public:
                 std::cout << std::endl << "Enter joint velocities (mm/s): ";
                 for (i = 0; i < NumAxes; i++)
                     std::cin >> jtvel[i];
-                jtvel.Divide(1000.0);   // Convert to SI
+                jtvel.ElementwiseDivide(jtscale);
                 jtvelSet.SetGoal(jtvel);
                 servo_jv(jtvelSet);
                 break;
@@ -280,7 +303,7 @@ public:
                 printf("%x ", (int)axSwitches[i]);
             printf("| ");
             printf("%d (%d) ", (int)mSampleNum, (int)mErrorCode);
-            jtpos.Multiply(1000.0);  // Convert to mm for display
+            jtpos.ElementwiseMultiply(jtscale);
             printf("POS: [");
             for (i = 0; i < jtpos.size(); i++)
                 printf(" %7.2lf ", jtpos[i]);
