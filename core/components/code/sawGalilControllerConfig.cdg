@@ -82,7 +82,7 @@ class {
     member {
         name lower;
         type double;
-        default std::numeric_limits<double>::min();
+        default -std::numeric_limits<double>::max();
         visibility public;
     }
     member {

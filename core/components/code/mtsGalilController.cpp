@@ -21,6 +21,8 @@ http://www.cisst.org/cisst/license.txt.
 
 #include <sawGalilController/mtsGalilController.h>
 
+enum GALIL_STATES { ST_IDLE, ST_HOMING };
+
 //****** Axis Data structures in DR packet ******
 
 #pragma pack(push, 1)     // Eliminate structure padding
@@ -90,6 +92,16 @@ const uint32_t AmpOverTempLower     = 0x00000004;  // Over-temperature (axes A-D
 const uint32_t AmpOverVoltageLower  = 0x00000002;  // Over-voltage (axes A-D)
 const uint32_t AmpOverCurrentLower  = 0x00000001;  // Over-current (axes A-D)
 
+// Stop codes (see SC command for full list)
+const uint8_t SC_Running  =  0;   // Motors are running
+const uint8_t SC_Stopped  =  1;   // Motors decelerating or stopped at position
+const uint8_t SC_FwdLim   =  2;   // Stopped at forward limit switch (or FL)
+const uint8_t SC_RevLim   =  3;   // Stopped at reverse limit switch (or BL)
+const uint8_t SC_StopCmd  =  4;   // Stopped by Stop command (ST)
+const uint8_t SC_OnError  =  8;   // Stopped by Off on Error (OE)
+const uint8_t SC_FindEdge =  9;   // Stopped after finding edge (FE)
+const uint8_t SC_Homing   = 10;   // Stopped after homing (HM) or find index (FI)
+
 // Following is information specific to the different Galil DMC controller models.
 // There currently are 6 different DMC model types. We do not support any RIO controllers.
 // Note also the Galil QZ command, which returns information about the DR structure.
@@ -119,20 +131,21 @@ CMN_IMPLEMENT_SERVICES_DERIVED_ONEARG(mtsGalilController, mtsTaskContinuous, mts
 
 mtsGalilController::mtsGalilController(const std::string &name) :
     mtsTaskContinuous(name, 1024, true), mGalil(0), mHeader(0), mAmpStatus(0),
-    mMotorPowerOn(false), mMotionActive(false)
+    mMotorPowerOn(false), mMotionActive(false), mState(ST_IDLE)
 {
     Init();
 }
 
 mtsGalilController::mtsGalilController(const std::string &name, unsigned int sizeStateTable, bool newThread) :
     mtsTaskContinuous(name, sizeStateTable, newThread), mGalil(0), mHeader(0), mAmpStatus(0),
-    mMotorPowerOn(false), mMotionActive(false)
+    mMotorPowerOn(false), mMotionActive(false), mState(ST_IDLE)
 {
     Init();
 }
 
 mtsGalilController::mtsGalilController(const mtsTaskContinuousConstructorArg & arg) :
-    mtsTaskContinuous(arg), mGalil(0), mHeader(0),mAmpStatus(0),  mMotorPowerOn(false), mMotionActive(false)
+    mtsTaskContinuous(arg), mGalil(0), mHeader(0),mAmpStatus(0),  mMotorPowerOn(false), mMotionActive(false),
+    mState(ST_IDLE)
 {
     Init();
 }
@@ -303,6 +316,8 @@ void mtsGalilController::Configure(const std::string& fileName)
     mEncoderCountsPerUnit.SetSize(mNumAxes);
     mEncoderOffset.SetSize(mNumAxes);
     mHomePos.SetSize(mNumAxes);
+    mHomeLimitDisable.SetSize(mNumAxes);
+    mLimitDisable.SetSize(mNumAxes);
     mAxisStatus.SetSize(mNumAxes);
     mStopCode.SetSize(mNumAxes);
     mSwitches.SetSize(mNumAxes);
@@ -337,16 +352,27 @@ void mtsGalilController::Configure(const std::string& fileName)
         mEncoderCountsPerUnit[axis] = axisData.position_bits_to_SI.scale;
         mEncoderOffset[axis] = static_cast<long>(axisData.position_bits_to_SI.offset);
         mHomePos[axis] = axisData.home_pos;
+        mHomeLimitDisable[axis] = 0;
+        if (axisData.home_pos <= axisData.position_limits.lower)
+            mHomeLimitDisable[axis] |= 2;   // Disable lower limit switch
+        else if (axisData.home_pos >= axisData.position_limits.upper)
+            mHomeLimitDisable[axis] |= 1;   // Disable upper limit switch
+
     }
     mGalilIndexMax++;   // Increment so that we can test for less than
 
     unsigned int k = 0;
+    unsigned int q = 0;
     for (i = 0; i < mGalilIndexMax; i++) {
         // If valid axis, add to mGalilAxes
-        if (mGalilIndexValid[i])
+        if (mGalilIndexValid[i]) {
             mGalilAxes[k++] = 'A'+i;
+            mGalilQuery[q++] = '?';
+        }
+        mGalilQuery[q++] = ',';
     }
     mGalilAxes[k] = 0;           // NULL termination
+    mGalilQuery[q-1] = 0;        // NULL termination (and remove last comma)
 
     // Default values should be read from JSON file
     mSpeedDefault.SetAll(0.025);   // 25 mm/s
@@ -398,6 +424,14 @@ void mtsGalilController::Startup()
     SetSpeed(mSpeedDefault);
     SetAccel(mAccelDefault);
     SetDecel(mDecelDefault);
+
+    // Store the current setting of limit disable (LD) in mLimitDisable
+    mLimitDisable.SetAll(0);
+    if (!QueryCmdValues("LD ", mGalilQuery, mLimitDisable))
+        CMN_LOG_CLASS_INIT_ERROR << "Startup: Could not query limit disable (LD)" << std::endl;
+    // Update mHomeLimitDisable based on mLimitDisable
+    for (size_t i = 0; i < mNumAxes; i++)
+        mHomeLimitDisable[i] |= mLimitDisable[i];
 
     // Get controller type (^R^V)
     if (GCmdT(mGalil, "\x12\x16", mBuffer, G_SMALL_BUFFER, 0) == G_NO_ERROR) {
@@ -504,8 +538,8 @@ void mtsGalilController::Run()
                 mActuatorState.Velocity()[i] = m_measured_js.Velocity()[i];
                 mActuatorState.InMotion()[i] = mAxisStatus[i] & StatusMotorMoving;
                 mActuatorState.MotorOff()[i] = mAxisStatus[i] & StatusMotorOff;
-                mActuatorState.SoftFwdLimitHit()[i] = (mStopCode[i] == 2);
-                mActuatorState.SoftRevLimitHit()[i] = (mStopCode[i] == 3);
+                mActuatorState.SoftFwdLimitHit()[i] = (mStopCode[i] == SC_FwdLim);
+                mActuatorState.SoftRevLimitHit()[i] = (mStopCode[i] == SC_RevLim);
                 // NOTE: FwdLimit, RevLimit and Home are affected by the CN command:
                 //   CN -1   (default) --> limit switches are active low (default)
                 //   CN ,-1  (default) --> home value is based on input voltage (GND --> 0)
@@ -566,6 +600,22 @@ void mtsGalilController::Run()
     RunEvent();
 
     ProcessQueuedCommands();
+
+    switch (mState) {
+
+    case ST_IDLE:
+        break;
+
+    case ST_HOMING:
+        if (mStopCode.Equal(SC_Homing)) {
+            SetHomePosition(mHomePos);
+            if (!galil_cmd_common("home (LD-restore)", "LD ", mLimitDisable))
+               mInterface->SendError("Home: failed to restore limits");
+            mInterface->SendStatus(this->GetName() + ": finished homing");
+            mState = ST_IDLE;
+        }
+        break;
+    }
 }
 
 void mtsGalilController::Cleanup(){
@@ -599,6 +649,32 @@ char *mtsGalilController::WriteCmdValues(char *buf, const char *cmd, const int32
     buf[len-1] = 0;
 
     return buf;
+}
+
+// Issue a query command (e.g., LD ?,?,?) and return the result in the data vector
+bool mtsGalilController::QueryCmdValues(const char *cmd, const char *query, vctIntVec &data) const
+{
+    char sendBuffer[G_SMALL_BUFFER];
+    char recvBuffer[G_SMALL_BUFFER];
+    strcpy(sendBuffer, cmd);
+    strcat(sendBuffer, query);
+
+    GReturn ret = GCmdT(mGalil, sendBuffer, recvBuffer, G_SMALL_BUFFER, 0);
+    if (ret == G_NO_ERROR) {
+        char *p = recvBuffer;
+        int nChars;
+        for (size_t i = 0; i < data.size(); i++) {
+            long value;
+            if (sscanf(p, "%ld%n", &value, &nChars) != 1) {
+                mInterface->SendError(this->GetName() + " QueryCmdValues failed for " + recvBuffer);
+                return false;
+            }
+            data[i] = value;
+            p += nChars;
+            if (*p == ',') p++;
+        }
+    }
+    return (ret == G_NO_ERROR);
 }
 
 void mtsGalilController::SendCommand(const std::string &cmdString)
@@ -681,6 +757,30 @@ bool mtsGalilController::galil_cmd_common(const char *cmdName, const char *cmdGa
         if (useOffset)
             value += mEncoderOffset[i];
         galilData[galilIndex] = value;
+    }
+
+    SendCommand(WriteCmdValues(mBuffer, cmdGalil, galilData, mGalilIndexValid, mGalilIndexMax));
+    return true;
+}
+
+bool mtsGalilController::galil_cmd_common(const char *cmdName, const char *cmdGalil,
+                                          const vctIntVec &data)
+{
+    if (!mGalil)
+        return false;
+
+    if (data.size() != mNumAxes) {
+        mInterface->SendError(this->GetName() + ": size mismatch in " + std::string(cmdName));
+        CMN_LOG_CLASS_RUN_ERROR << cmdName << ": size mismatch (data size = " << data.size()
+                                << ", num_axes = " << mNumAxes << ")" << std::endl;
+        return false;
+    }
+
+    int32_t galilData[GALIL_MAX_AXES];
+    size_t i;
+    for (i = 0; i < mNumAxes; i++) {
+        unsigned int galilIndex = mAxisToGalilIndexMap[i];
+        galilData[galilIndex] = data[i];
     }
 
     SendCommand(WriteCmdValues(mBuffer, cmdGalil, galilData, mGalilIndexValid, mGalilIndexMax));
@@ -796,8 +896,18 @@ void mtsGalilController::Home(const vctBoolVec &mask)
     UnHome(mask);
     if (mMotionActive)
         SendCommand(WriteCmdAxes(mBuffer, "ST ", galilAxes));
+
+    // Check whether limit needs to be disabled
+    if (mHomeLimitDisable.Any() && (mHomeLimitDisable != mLimitDisable)) {
+        if (!galil_cmd_common("home (LD)", "LD ", mHomeLimitDisable)) {
+            mInterface->SendError("Home: failed to disable limits");
+            return;
+        }
+    }
+
     SendCommand(WriteCmdAxes(mBuffer, "HM ", galilAxes));
     SendCommand(WriteCmdAxes(mBuffer, "BG ", galilAxes));
+    mState = ST_HOMING;
 }
 
 void mtsGalilController::UnHome(const vctBoolVec &mask)

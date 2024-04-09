@@ -57,6 +57,9 @@ private:
     mtsFunctionWrite servo_jr;
     mtsFunctionWrite servo_jv;
     mtsFunctionVoid hold;
+    mtsFunctionWrite home;
+    mtsFunctionWrite find_edge;
+    mtsFunctionWrite find_index;
     mtsFunctionRead get_config_js;
     mtsFunctionRead get_header;
     mtsFunctionRead get_sample_num;
@@ -66,6 +69,8 @@ private:
     mtsFunctionRead get_switches;
     mtsFunctionRead get_analog;
     mtsFunctionRead GetActuatorState;
+    mtsFunctionWrite SetSpeed;
+    mtsFunctionRead GetSpeed;
 
     void OnStatusEvent(const mtsMessage &msg) {
         std::cout << std::endl << "Status: " << msg.Message << std::endl;
@@ -94,6 +99,9 @@ public:
             req->AddFunction("servo_jv", servo_jv);
             req->AddFunction("hold", hold);
             req->AddFunction("configuration_js", get_config_js);
+            req->AddFunction("Home", home);
+            req->AddFunction("FindEdge", find_edge);
+            req->AddFunction("FindIndex", find_index);
             req->AddFunction("EnableMotorPower", crtk_enable);
             req->AddFunction("DisableMotorPower", crtk_disable);
             req->AddFunction("GetHeader", get_header);
@@ -104,6 +112,8 @@ public:
             req->AddFunction("GetSwitches", get_switches);
             req->AddFunction("GetAnalogInput", get_analog);
             req->AddFunction("GetActuatorState", GetActuatorState);
+            req->AddFunction("GetSpeed", GetSpeed);
+            req->AddFunction("SetSpeed", SetSpeed);
             req->AddEventHandlerWrite(&GalilClient::OnStatusEvent, this, "status");
             req->AddEventHandlerWrite(&GalilClient::OnWarningEvent, this, "warning");
             req->AddEventHandlerWrite(&GalilClient::OnErrorEvent, this, "error");
@@ -126,6 +136,7 @@ public:
                   << "  a: get actuator state" << std::endl
                   << "  o: get operating state" << std::endl
                   << "  i: display header info" << std::endl
+                  << "  z: home robot" << std::endl
                   << "  q: quit" << std::endl;
     }
 
@@ -262,6 +273,18 @@ public:
                     uint32_t header;
                     get_header(header);
                     std::cout << std::endl << "Header: " << std::hex << header << std::endl;
+                }
+                break;
+
+            case 'z':
+                {
+                    vctBoolVec mask(NumAxes);
+                    vctDoubleVec spd(NumAxes);
+                    mask.SetAll(true);
+                    std::cout << std::endl << "Starting home" << std::endl;
+                    spd.SetAll(0.01);  // 10 mm/s
+                    SetSpeed(spd);
+                    home(mask);
                 }
                 break;
 

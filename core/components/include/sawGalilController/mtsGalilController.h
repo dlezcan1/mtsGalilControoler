@@ -89,6 +89,8 @@ protected:
     vctDoubleVec  mEncoderCountsPerUnit;    // Encoder conversion factors
     vctLongVec    mEncoderOffset;           // Encoder offset (counts or bits)
     vctDoubleVec  mHomePos;                 // Encoder home positions (offsets)
+    vctIntVec     mHomeLimitDisable;        // Limit switch disable during homing
+    vctIntVec     mLimitDisable;            // Current setting of limit disable (LD)
     vctUShortVec  mAxisStatus;              // Axis status
     vctUCharVec   mStopCode;                // Axis stop code (see Galil SC command)
     vctUCharVec   mSwitches;                // Axis switches (see Galil TS command)
@@ -101,10 +103,13 @@ protected:
     vctDoubleVec  mAccel;                   // Current accel
     vctDoubleVec  mDecelDefault;            // Default decel
     vctDoubleVec  mDecel;                   // Current decel
+    unsigned int  mState;                   // Internal state machine
     mtsInterfaceProvided *mInterface;       // Provided interface
 
     // String of configured axes (e.g., "ABC")
     char mGalilAxes[GALIL_MAX_AXES+1];
+    // String for querying (e.g., "?,?,?")
+    char mGalilQuery[2*GALIL_MAX_AXES];
     // Boolean array indicating which Galil indexes are valid
     bool mGalilIndexValid[GALIL_MAX_AXES];
 
@@ -117,6 +122,12 @@ protected:
     //    axes   Galil axes string (e.g., "ABC")
     // Example output: "BG ABC"
     static char *WriteCmdAxes(char *buf, const char *cmd, const char *axes);
+
+    // Local method to write a query command (e.g., "LD ?,?,?") and parse the result
+    //    cmd    Galil command string to use for query, include space if desired (e.g., "LD ")
+    //    query  Query string (e.g., "?,?,?" or "?,,?")
+    //    data   Vector for storing result of query
+    bool QueryCmdValues(const char *cmd, const char *query, vctIntVec &data) const;
 
     // Local static method to create cmd followed by comma-separated values
     // Parameters:
@@ -156,9 +167,10 @@ protected:
     void AbortProgram();
     void AbortMotion();
 
-    // Common method for sending command to Galil
+    // Common methods for sending command to Galil
     bool galil_cmd_common(const char *cmdName, const char *cmdGalil, const vctDoubleVec &goal,
                           bool useOffset);
+    bool galil_cmd_common(const char *cmdName, const char *cmdGalil, const vctIntVec &data);
 
     // Move joint to specified position
     void servo_jp(const prmPositionJointSet &jtpos);
