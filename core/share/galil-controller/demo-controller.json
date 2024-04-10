@@ -1,0 +1,20 @@
+{
+    "FileVersion": 1,
+    "IP_Address": "192.168.1.11",
+    "Galil_Direct": 1,
+    "DMC_Startup_Program": "Does/not/exist",
+    "Axes": [
+        {
+            "Galil_Channel": 0,
+            "Encoder_Conversion": 1.0
+        },
+        {
+            "Galil_Channel": 1,
+            "Encoder_Conversion": 1.0
+        },
+        {
+            "Galil_Channel": 2,
+            "Encoder_Conversion": 1.0
+        }
+    ]
+}

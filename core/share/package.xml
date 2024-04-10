@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package>
-  <name>sawGalilController_config</name>
-  <version>2.2.1</version>
+  <name>saw_galil_controller_config</name>
+  <version>0.0.1</version>
   <description>mtsGalilController config files</description>
 
   <maintainer email="dlezcan1@jhu.edu">Dimitri Lezcano</maintainer>
